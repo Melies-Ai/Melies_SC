@@ -35,12 +35,10 @@ contract Melies is ERC20, ERC20Pausable, AccessControl, ERC20Permit {
      * @param minter Address to be granted the minter role
      * @param burner Address to be granted the burner role
      */
-    constructor(
-        address defaultAdmin,
-        address pauser,
-        address minter,
-        address burner
-    ) ERC20("Melies", "MEL") ERC20Permit("Melies") {
+    constructor(address defaultAdmin, address pauser, address minter, address burner)
+        ERC20("Melies", "MEL")
+        ERC20Permit("Melies")
+    {
         _grantRole(DEFAULT_ADMIN_ROLE, defaultAdmin);
         _grantRole(PAUSER_ROLE, pauser);
         _grantRole(MINTER_ROLE, minter);
@@ -108,11 +106,7 @@ contract Melies is ERC20, ERC20Pausable, AccessControl, ERC20Permit {
      * - when `to` is zero, `amount` of ``from``'s tokens will be burned.
      * - `from` and `to` are never both zero.
      */
-    function _update(
-        address from,
-        address to,
-        uint256 value
-    ) internal override(ERC20, ERC20Pausable) {
+    function _update(address from, address to, uint256 value) internal override(ERC20, ERC20Pausable) {
         super._update(from, to, value);
     }
 }
