@@ -4,3 +4,9 @@
 [submodule "lib/foundry-chainlink-toolkit"]
 	path = lib/foundry-chainlink-toolkit
 	url = https://github.com/smartcontractkit/foundry-chainlink-toolkit
+[submodule "contracts/v2-periphery"]
+	path = contracts/v2-periphery
+	url = https://github.com/Uniswap/v2-periphery.git
+[submodule "lib/uniswap-v2-periphery"]
+	path = lib/uniswap-v2-periphery
+	url = https://github.com/Uniswap/v2-periphery.git

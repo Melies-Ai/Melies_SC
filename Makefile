@@ -12,6 +12,7 @@ install:
 	forge install foundry-rs/forge-std --no-commit
 	forge install OpenZeppelin/openzeppelin-contracts --no-commit
 	forge install smartcontractkit/foundry-chainlink-toolkit --no-commit
+	git submodule add -f https://github.com/Uniswap/v2-periphery.git lib/uniswap-v2-periphery
 
 # Update dependencies
 update:
