@@ -62,22 +62,13 @@ contract Melies is ERC20, ERC20Pausable, AccessControl, ERC20Permit {
     /**
      * @dev Constructor that sets up the token with initial roles
      * @param defaultAdmin Address to be granted the default admin role
-     * @param pauser Address to be granted the pauser role
-     * @param minter Address to be granted the minter role
-     * @param burner Address to be granted the burner role
      * @param initialTgeTimestamp The initial timestamp for the TGE date
      */
     constructor(
         address defaultAdmin,
-        address pauser,
-        address minter,
-        address burner,
         uint256 initialTgeTimestamp
     ) ERC20("Melies", "MEL") ERC20Permit("Melies") {
         _grantRole(DEFAULT_ADMIN_ROLE, defaultAdmin);
-        _grantRole(PAUSER_ROLE, pauser);
-        _grantRole(MINTER_ROLE, minter);
-        _grantRole(BURNER_ROLE, burner);
         tgeTimestamp = initialTgeTimestamp;
     }
 

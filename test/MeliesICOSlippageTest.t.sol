@@ -37,13 +37,13 @@ contract MeliesICOSlippageTest is Test {
 
         tgeTimestamp = block.timestamp + 30 days;
 
-        meliesToken = new MockMelies(
-            admin,
-            pauser,
-            minter,
-            burner,
-            tgeTimestamp
-        );
+        meliesToken = new MockMelies(admin, tgeTimestamp);
+
+        vm.startPrank(admin);
+        meliesToken.grantRole(meliesToken.PAUSER_ROLE(), pauser);
+        meliesToken.grantRole(meliesToken.MINTER_ROLE(), minter);
+        meliesToken.grantRole(meliesToken.BURNER_ROLE(), burner);
+        vm.stopPrank();
         usdcToken = new MockERC20("USDC", "USDC");
         usdtToken = new MockERC20("USDT", "USDT");
         uniswapRouter = new MockUniswapV2Router02();

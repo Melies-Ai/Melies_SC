@@ -44,7 +44,13 @@ contract MeliesTest is Test {
 
         tgeTimestamp = block.timestamp + 21 days;
 
-        meliesToken = new Melies(admin, pauser, minter, burner, tgeTimestamp);
+        meliesToken = new Melies(admin, tgeTimestamp);
+
+        vm.startPrank(admin);
+        meliesToken.grantRole(meliesToken.PAUSER_ROLE(), pauser);
+        meliesToken.grantRole(meliesToken.MINTER_ROLE(), minter);
+        meliesToken.grantRole(meliesToken.BURNER_ROLE(), burner);
+        vm.stopPrank();
     }
 
     // INITIAL STATE AND SETUP TESTS

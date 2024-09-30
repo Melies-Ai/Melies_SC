@@ -8,11 +8,8 @@ import "../MeliesICO.sol";
 contract MockMelies is Melies {
     constructor(
         address defaultAdmin,
-        address pauser,
-        address minter,
-        address burner,
         uint256 initialTgeTimestamp
-    ) Melies(defaultAdmin, pauser, minter, burner, initialTgeTimestamp) {}
+    ) Melies(defaultAdmin, initialTgeTimestamp) {}
 
     function setTgeTimestamp(uint256 newTgeTimestamp) public {
         tgeTimestamp = newTgeTimestamp;

@@ -30,13 +30,11 @@ contract MeliesICOWhitelistTest is Test {
         vm.startPrank(admin);
 
         // Deploy necessary contracts
-        meliesToken = new MockMelies(
-            admin,
-            admin,
-            admin,
-            admin,
-            block.timestamp + 1 days
-        );
+        meliesToken = new MockMelies(admin, block.timestamp + 1 days);
+
+        meliesToken.grantRole(meliesToken.PAUSER_ROLE(), admin);
+        meliesToken.grantRole(meliesToken.MINTER_ROLE(), admin);
+        meliesToken.grantRole(meliesToken.BURNER_ROLE(), admin);
         usdcToken = new MockERC20("USDC", "USDC");
         usdtToken = new MockERC20("USDT", "USDT");
         uniswapRouter = new MockUniswapV2Router02();
