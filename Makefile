@@ -24,7 +24,8 @@ build:
 
 # Run tests
 test:
-	forge test
+	forge test --no-match-test test_LargeAmountStakersScenario --ffi --gas-limit 156000000 --memory-limit 30000000000
+	forge test --match-test test_LargeAmountStakersScenario --ffi --gas-limit 15600000000000000 --memory-limit 30000000000
 
 # Run tests with gas report
 test-with-gas:
