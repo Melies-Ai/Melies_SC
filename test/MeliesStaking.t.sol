@@ -9,7 +9,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/contracts/utils/Strings.sol";
 
 contract MeliesStakingTest is Test {
-    DebugMeliesStaking public stakingContract;
+    MeliesStaking public stakingContract;
     Melies public meliesToken;
     uint256 public tgeTimestamp;
 
@@ -63,7 +63,7 @@ contract MeliesStakingTest is Test {
         meliesToken = new Melies(admin, tgeTimestamp);
 
         // Deploy MeliesStaking contract
-        stakingContract = new DebugMeliesStaking(
+        stakingContract = new MeliesStaking(
             address(meliesToken),
             uint32(tgeTimestamp)
         );
@@ -71,8 +71,8 @@ contract MeliesStakingTest is Test {
         // Grant MINTER_ROLE to admin for initial token distribution
         meliesToken.grantRole(meliesToken.MINTER_ROLE(), admin);
 
-        // Transfer 100M tokens to staking contract
-        meliesToken.mint(address(stakingContract), 100_000_000 * 1e8);
+        // Transfer 20M tokens to staking contract
+        meliesToken.mint(address(stakingContract), 20_000_000 * 1e8);
 
         // Distribute tokens to users
         meliesToken.mint(user1, 100_000e8);
@@ -371,6 +371,100 @@ contract MeliesStakingTest is Test {
         assertEq(stakingContract.getTotalStaked(), stakeAmount);
     }
 
+    function test_SetDurationMultipliers() public {
+        uint16[5] memory newMultipliers = [1e2, 1.5e2, 2e2, 2.5e2, 3.5e2];
+
+        vm.prank(admin);
+        stakingContract.setDurationMultipliers(newMultipliers);
+
+        for (uint8 i = 0; i < 5; i++) {
+            assertEq(
+                stakingContract.DURATION_MULTIPLIERS(i),
+                newMultipliers[i]
+            );
+        }
+    }
+
+    function test_SetDurationMultipliers_InvalidFirstMultiplier() public {
+        uint16[5] memory newMultipliers = [2e2, 2.5e2, 3e2, 3.5e2, 4e2];
+
+        vm.prank(admin);
+        vm.expectRevert(MeliesStaking.InvalidMultiplier.selector);
+        stakingContract.setDurationMultipliers(newMultipliers);
+    }
+
+    function test_SetDurationMultipliers_InvalidOrder() public {
+        uint16[5] memory newMultipliers = [1e2, 2.5e2, 2e2, 3.5e2, 4e2];
+
+        vm.prank(admin);
+        vm.expectRevert(MeliesStaking.InvalidMultiplier.selector);
+        stakingContract.setDurationMultipliers(newMultipliers);
+    }
+
+    function test_SetDailyBudgetTarget() public {
+        uint256 newDailyBudget = 10_000e8;
+
+        vm.prank(admin);
+        stakingContract.setDailyBudgetTarget(newDailyBudget);
+
+        assertEq(
+            stakingContract.DAILY_BUDGET_TARGET(),
+            newDailyBudget * 10 ** PRECISION_FACTOR
+        );
+    }
+
+    function test_SetDailyBudgetTarget_ZeroValue() public {
+        uint256 newDailyBudget = 0;
+
+        vm.prank(admin);
+        vm.expectRevert(
+            MeliesStaking.DailyBudgetMustBeGreaterThanZero.selector
+        );
+        stakingContract.setDailyBudgetTarget(newDailyBudget);
+    }
+
+    function test_SetMinStakeAmount() public {
+        uint256 newMinStakeAmount = 200e8;
+
+        vm.prank(admin);
+        stakingContract.setMinStakeAmount(newMinStakeAmount);
+
+        assertEq(stakingContract.MIN_STAKE_AMOUNT(), newMinStakeAmount);
+    }
+
+    function test_SetMinStakeAmount_ZeroValue() public {
+        uint256 newMinStakeAmount = 0;
+
+        vm.prank(admin);
+        stakingContract.setMinStakeAmount(newMinStakeAmount);
+
+        assertEq(stakingContract.MIN_STAKE_AMOUNT(), newMinStakeAmount);
+    }
+
+    function test_OnlyAdminCanSetDurationMultipliers() public {
+        uint16[5] memory newMultipliers = [1e2, 1.5e2, 2e2, 2.5e2, 3.5e2];
+
+        vm.prank(user1);
+        vm.expectRevert();
+        stakingContract.setDurationMultipliers(newMultipliers);
+    }
+
+    function test_OnlyAdminCanSetDailyBudgetTarget() public {
+        uint256 newDailyBudget = 10_000e8;
+
+        vm.prank(user1);
+        vm.expectRevert();
+        stakingContract.setDailyBudgetTarget(newDailyBudget);
+    }
+
+    function test_OnlyAdminCanSetMinStakeAmount() public {
+        uint256 newMinStakeAmount = 200e8;
+
+        vm.prank(user1);
+        vm.expectRevert();
+        stakingContract.setMinStakeAmount(newMinStakeAmount);
+    }
+
     function test_IsRewardUpdatingTests() public {
         vm.pauseGasMetering();
         vm.warp(1);
@@ -443,11 +537,11 @@ contract MeliesStakingTest is Test {
         uint256 initialContractBalance = meliesToken.balanceOf(
             address(stakingContract)
         );
-        assertEq(initialContractBalance, 100_000_000 * 1e8 + stakeAmount);
+        assertEq(initialContractBalance, 20_000_000 * 1e8 + stakeAmount);
 
         stakingContract.emergencyWithdraw(
             address(meliesToken),
-            100_000_000 * 1e8 + stakeAmount
+            20_000_000 * 1e8 + stakeAmount
         );
 
         uint256 finalContractBalance = meliesToken.balanceOf(
@@ -458,7 +552,7 @@ contract MeliesStakingTest is Test {
         uint256 adminBalance = meliesToken.balanceOf(admin);
         assertEq(
             adminBalance,
-            100_000_000 * 1e8 + stakeAmount - initialAdminBalance
+            20_000_000 * 1e8 + stakeAmount - initialAdminBalance
         );
     }
 

@@ -43,17 +43,21 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
     error NoRewardsToClaim();
     error CanOnlyUpdateOncePerDay();
     error CanOnlyToggleForNoLockStaking();
+    error StakingAmountTooLow();
+    error InvalidMultiplier();
+    error DailyBudgetMustBeGreaterThanZero();
 
     IERC20 public meliesToken;
 
     uint256 private constant ANNUAL_BUDGET = 2_280_000e8; // 2.28M tokens
-    uint256 private constant DAILY_BUDGET_TARGET =
+    uint256 public DAILY_BUDGET_TARGET =
         (ANNUAL_BUDGET / 365) * 10 ** PRECISION_FACTOR;
-    uint256[5] private DURATION_MULTIPLIERS = [1e2, 1.3e2, 1.6e2, 2.2e2, 3e2];
     uint256 private constant DURATION_MULTIPLIER_PRECISION = 2;
     uint256 private constant PRECISION_FACTOR = 12;
     uint256 private constant GAS_LIMIT_EXECUTION = 100_000;
+    uint256 public MIN_STAKE_AMOUNT = 100e8;
     bytes32 private constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
+    uint16[5] public DURATION_MULTIPLIERS = [1e2, 1.3e2, 1.6e2, 2.2e2, 3e2];
 
     uint256 private totalStakedWithPrecision;
     // Total ponderated staked is the total staked multiplied by the duration multiplier
@@ -99,6 +103,7 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
     ) external whenNotPaused nonReentrant {
         if (isRewardUpdating) revert RewardsBeingUpdated();
         if (_amount == 0) revert AmountMustBeGreaterThanZero();
+        if (_amount < MIN_STAKE_AMOUNT) revert StakingAmountTooLow();
         if (_durationIndex >= DURATION_MULTIPLIERS.length)
             revert InvalidDurationIndex();
         if (_durationIndex == 4 && block.timestamp > tgeTimestamp + 90 days) {
@@ -473,5 +478,41 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
         uint256 amount
     ) external onlyRole(ADMIN_ROLE) {
         IERC20(token).safeTransfer(msg.sender, amount);
+    }
+
+    /**
+     * @dev Allows admin to change the DURATION_MULTIPLIERS
+     * @param newMultipliers New array of duration multipliers
+     */
+    function setDurationMultipliers(
+        uint16[5] memory newMultipliers
+    ) external onlyRole(ADMIN_ROLE) {
+        if (newMultipliers[0] != 1e2) revert InvalidMultiplier();
+        for (uint8 i = 1; i < 5; i++) {
+            if (newMultipliers[i] <= newMultipliers[i - 1])
+                revert InvalidMultiplier();
+        }
+        DURATION_MULTIPLIERS = newMultipliers;
+    }
+
+    /**
+     * @dev Allows admin to change the DAILY_BUDGET_TARGET
+     * @param newDailyBudget New daily budget target
+     */
+    function setDailyBudgetTarget(
+        uint256 newDailyBudget
+    ) external onlyRole(ADMIN_ROLE) {
+        if (newDailyBudget == 0) revert DailyBudgetMustBeGreaterThanZero();
+        DAILY_BUDGET_TARGET = newDailyBudget * 10 ** PRECISION_FACTOR;
+    }
+
+    /**
+     * @dev Allows admin to change the MIN_STAKE_AMOUNT
+     * @param newMinStakeAmount New minimum stake amount
+     */
+    function setMinStakeAmount(
+        uint256 newMinStakeAmount
+    ) external onlyRole(ADMIN_ROLE) {
+        MIN_STAKE_AMOUNT = newMinStakeAmount;
     }
 }
