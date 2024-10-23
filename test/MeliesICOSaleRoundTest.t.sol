@@ -145,6 +145,8 @@ contract MeliesICOSaleRoundTest is Test {
             uint256 roundMaxPurchase,
             ,
             ,
+            ,
+            ,
             uint256 roundCliffDuration,
             uint256 roundVestingDuration,
             uint256 roundTgeReleasePercentage,
@@ -184,11 +186,11 @@ contract MeliesICOSaleRoundTest is Test {
             );
         }
 
-        (uint256 round0StartTime, , , , , , , , , , , , ) = meliesICO
+        (uint256 round0StartTime, , , , , , , , , , , , , , ) = meliesICO
             .saleRounds(0);
-        (uint256 round1StartTime, , , , , , , , , , , , ) = meliesICO
+        (uint256 round1StartTime, , , , , , , , , , , , , , ) = meliesICO
             .saleRounds(1);
-        (uint256 round2StartTime, , , , , , , , , , , , ) = meliesICO
+        (uint256 round2StartTime, , , , , , , , , , , , , , ) = meliesICO
             .saleRounds(2);
 
         assertEq(round0StartTime, startTime);
@@ -263,42 +265,6 @@ contract MeliesICOSaleRoundTest is Test {
         meliesICO.getCurrentRoundId();
     }
 
-    function test_UpdateCurrentRoundEndTime() public {
-        uint256 startTime = block.timestamp;
-        uint256 endTime = startTime + 7 days;
-        setupSaleRound();
-
-        vm.warp(startTime + 1);
-        uint256 newEndTime = endTime + 3 days;
-
-        vm.prank(admin);
-        meliesICO.updateCurrentRoundEndTime(newEndTime);
-
-        (, uint256 updatedEndTime, , , , , , , , , , , ) = meliesICO.saleRounds(
-            0
-        );
-        assertEq(updatedEndTime, newEndTime);
-    }
-
-    function test_UpdateCurrentRoundEndTimeUnauthorized() public {
-        uint256 startTime = block.timestamp;
-        uint256 endTime = startTime + 7 days;
-        setupSaleRound();
-
-        vm.warp(startTime + 1);
-        uint256 newEndTime = endTime + 3 days;
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                user1,
-                meliesICO.ADMIN_ROLE()
-            )
-        );
-        vm.prank(user1);
-        meliesICO.updateCurrentRoundEndTime(newEndTime);
-    }
-
     function test_UpdateFutureRound() public {
         uint256 startTime = 2;
         setupMultipleSaleRounds();
@@ -306,56 +272,32 @@ contract MeliesICOSaleRoundTest is Test {
         // Warp to the first round
         vm.warp(startTime + 1 seconds);
 
-        uint256 newStartTime = startTime + 8 days;
-        uint256 newEndTime = startTime + 15 days;
-
         vm.prank(admin);
-        meliesICO.updateFutureRound(
-            1,
-            newStartTime,
-            newEndTime,
-            3e6,
-            3000000e6,
-            300000e6,
-            300e6,
-            30000e6,
-            90 days,
-            450 days,
-            15, // 15% TGE release
-            3 days // 3 days lock period
-        );
+        meliesICO.updateFutureRound(1, 3000000e6, 30000e6);
 
         (
-            uint256 updatedStartTime,
-            uint256 updatedEndTime,
-            uint256 updatedTokenPrice,
+            ,
+            ,
+            ,
             uint256 updatedMaxCap,
-            uint256 updatedSoftCap,
-            uint256 updatedMinPurchase,
+            ,
+            ,
             uint256 updatedMaxPurchase,
             ,
             ,
-            uint256 updatedCliffDuration,
-            uint256 updatedVestingDuration,
-            uint256 updatedTgeReleasePercentage,
-            uint256 updatedLockDuration
+            ,
+            ,
+            ,
+            ,
+            ,
+
         ) = meliesICO.saleRounds(1);
 
-        assertEq(updatedStartTime, newStartTime);
-        assertEq(updatedEndTime, newEndTime);
-        assertEq(updatedTokenPrice, 3e6);
         assertEq(updatedMaxCap, 3000000e6);
-        assertEq(updatedSoftCap, 300000e6);
-        assertEq(updatedMinPurchase, 300e6);
         assertEq(updatedMaxPurchase, 30000e6);
-        assertEq(updatedCliffDuration, 90 days);
-        assertEq(updatedVestingDuration, 450 days);
-        assertEq(updatedTgeReleasePercentage, 15);
-        assertEq(updatedLockDuration, 3 days);
     }
 
     function test_UpdateFutureRoundUnauthorized() public {
-        uint256 startTime = 2;
         setupMultipleSaleRounds();
 
         vm.expectRevert(
@@ -366,20 +308,7 @@ contract MeliesICOSaleRoundTest is Test {
             )
         );
         vm.prank(user1);
-        meliesICO.updateFutureRound(
-            1,
-            startTime + 8 days,
-            startTime + 15 days,
-            3e6,
-            3000000,
-            300000,
-            300,
-            30000,
-            90 days,
-            450 days,
-            15, // 15% TGE release
-            3 days // 3 days lock period
-        );
+        meliesICO.updateFutureRound(1, 3000000e6, 30000e6);
     }
 
     function test_UpdatePastOrCurrentRound() public {
@@ -390,20 +319,7 @@ contract MeliesICOSaleRoundTest is Test {
 
         vm.prank(admin);
         vm.expectRevert(IMeliesICO.CannotModifyPastOrCurrentRound.selector);
-        meliesICO.updateFutureRound(
-            0,
-            startTime,
-            startTime + 7 days,
-            3e6,
-            3000000,
-            300000,
-            300,
-            30000,
-            90 days,
-            450 days,
-            15, // 15% TGE release
-            3 days // 3 days lock period
-        );
+        meliesICO.updateFutureRound(0, 3000000e6, 30000e6);
     }
 
     function test_RoundTransitions() public {

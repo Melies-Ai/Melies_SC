@@ -638,6 +638,309 @@ contract MeliesICOVestingClaimingTest is Test {
         );
     }
 
+    function test_AdjustCliffAndVestingAfterBothPeriods() public {
+        setupSaleRound();
+        uint256 endTime = 2 + 7 days;
+        uint256 initialCliff = 30 days;
+        uint256 initialVesting = 180 days;
+        setupTgeTimestamp(endTime);
+
+        vm.warp(endTime + initialCliff + initialVesting + 1);
+
+        vm.expectRevert(IMeliesICO.InvalidCliffOrVestingAdjustment.selector);
+        vm.prank(admin);
+        meliesICO.adjustCliffAndVesting(0, 60 days, 240 days);
+    }
+
+    function test_AdjustCliffAndVestingExceedsMaxDuration() public {
+        setupSaleRound();
+        uint256 endTime = 2 + 7 days;
+        uint256 initialCliff = 30 days;
+        uint256 initialVesting = 180 days;
+
+        vm.warp(endTime + 1);
+
+        uint256 newCliff = 400 days;
+        uint256 newVesting = 1100 days;
+
+        vm.expectRevert(IMeliesICO.InvalidCliffOrVestingAdjustment.selector);
+        vm.prank(admin);
+        meliesICO.adjustCliffAndVesting(0, newCliff, newVesting);
+
+        // Verify that the total duration exceeds 48 months
+        assert(newCliff + newVesting > 48 * 30 days);
+    }
+
+    function test_AdjustCliffOnly() public {
+        setupSaleRound();
+        uint256 endTime = block.timestamp + 7 days;
+        uint256 initialCliff = 30 days;
+        uint256 initialVesting = 180 days;
+        uint256 newCliff = 60 days;
+
+        vm.warp(endTime + 15 days);
+
+        vm.prank(admin);
+        vm.expectEmit(true, false, false, true);
+        emit IMeliesICO.CliffAndVestingAdjusted(0, newCliff, initialVesting);
+        meliesICO.adjustCliffAndVesting(0, newCliff, initialVesting);
+
+        (
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            uint256 cliffDuration,
+            uint256 vestingDuration,
+            ,
+
+        ) = meliesICO.saleRounds(0);
+        assertEq(cliffDuration, newCliff, "Cliff duration should be updated");
+        assertEq(
+            vestingDuration,
+            initialVesting,
+            "Vesting duration should remain unchanged"
+        );
+    }
+
+    function test_AdjustVestingOnly() public {
+        setupSaleRound();
+        uint256 endTime = block.timestamp + 7 days;
+        uint256 initialCliff = 30 days;
+        uint256 initialVesting = 180 days;
+        uint256 newVesting = 240 days;
+
+        vm.warp(endTime + initialCliff + 1);
+
+        vm.prank(admin);
+        vm.expectEmit(true, false, false, true);
+        emit IMeliesICO.CliffAndVestingAdjusted(0, initialCliff, newVesting);
+        meliesICO.adjustCliffAndVesting(0, initialCliff, newVesting);
+
+        (
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            uint256 cliffDuration,
+            uint256 vestingDuration,
+            ,
+
+        ) = meliesICO.saleRounds(0);
+        assertEq(
+            cliffDuration,
+            initialCliff,
+            "Cliff duration should remain unchanged"
+        );
+        assertEq(
+            vestingDuration,
+            newVesting,
+            "Vesting duration should be updated"
+        );
+    }
+
+    function test_AdjustBothCliffAndVesting() public {
+        setupSaleRound();
+        uint256 newCliff = 60 days;
+        uint256 newVesting = 240 days;
+
+        vm.prank(admin);
+        vm.expectEmit(true, false, false, true);
+        emit IMeliesICO.CliffAndVestingAdjusted(0, newCliff, newVesting);
+        meliesICO.adjustCliffAndVesting(0, newCliff, newVesting);
+
+        (
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            ,
+            uint256 cliffDuration,
+            uint256 vestingDuration,
+            ,
+
+        ) = meliesICO.saleRounds(0);
+        assertEq(cliffDuration, newCliff, "Cliff duration should be updated");
+        assertEq(
+            vestingDuration,
+            newVesting,
+            "Vesting duration should be updated"
+        );
+    }
+
+    function test_AdjustCliffAndVestingBeforeClaiming() public {
+        setupSaleRoundAndPurchase();
+        uint256 tgeTime = 2 + 7 days;
+        uint256 newCliff = 60 days; // initialCliff = 30 days
+        uint256 newVesting = 240 days; // initialVesting = 180 days
+        setupTgeTimestamp(tgeTime);
+        vm.warp(tgeTime);
+
+        // End ICO and enable claiming
+        vm.prank(admin);
+        meliesICO.endIco();
+
+        // Adjust cliff and vesting
+        vm.prank(admin);
+        meliesICO.adjustCliffAndVesting(0, newCliff, newVesting);
+
+        // Fast forward to before the new cliff ends
+        vm.warp(tgeTime + newCliff - 1);
+        (uint256 claimableAmount, , ) = meliesICO.getClaimableAmount(user1, 0);
+        assertEq(
+            claimableAmount,
+            1_000e8, // 10% of 10_000e8
+            "Should have 10% available before new cliff"
+        );
+        // Check claimable amount at various points
+        vm.warp(tgeTime + newCliff + 1);
+        (claimableAmount, , ) = meliesICO.getClaimableAmount(user1, 0);
+        assertEq(
+            claimableAmount,
+            2_125e8 // 10% of 10_000e8 + 1 / 8 of 9_000e8 = 1_000e8 + 1_125e8
+        );
+
+        vm.warp(tgeTime + newCliff + newVesting / 2 + 1);
+        (claimableAmount, , ) = meliesICO.getClaimableAmount(user1, 0);
+        assertEq(
+            claimableAmount,
+            6_625e8 // 10% of 10_000e8 + 5 / 8 of 9_000e8 = 1_000e8 + 5_625e8 = 6_625e8
+        );
+
+        vm.warp(tgeTime + newCliff + newVesting + 1);
+        (claimableAmount, , ) = meliesICO.getClaimableAmount(user1, 0);
+        assertEq(
+            claimableAmount,
+            10000e8,
+            "Should have 100% available after full vesting"
+        );
+    }
+
+    function test_AdjustCliffAndVestingAfterPartialClaiming() public {
+        setupSaleRoundAndPurchase();
+        uint256 endTime = 2 + 7 days;
+        uint256 initialCliff = 30 days;
+        uint256 initialVesting = 180 days;
+        uint256 newVesting = 360 days;
+        setupTgeTimestamp(endTime);
+        vm.warp(endTime);
+
+        // End ICO and enable claiming
+        vm.prank(admin);
+        meliesICO.endIco();
+
+        // Claim tokens after initial cliff
+        vm.warp(endTime + initialCliff + initialVesting / 4); // 1.5 months
+        vm.prank(user1);
+        meliesICO.claimTokens();
+
+        uint256 initialBalance = meliesToken.balanceOf(user1);
+        assertEq(initialBalance, 4_000e8); // 10% of 10_000e8 + 2 / 6 of 9_000e8 = 1_000e8 + 3_000e8 = 4_000e8
+
+        // Adjust vesting only (cliff adjustment not possible at this point)
+        vm.prank(admin);
+        meliesICO.adjustCliffAndVesting(0, 0, newVesting);
+
+        // Check claimable amount at various points
+        (uint256 claimableAmount, , ) = meliesICO.getClaimableAmount(user1, 0);
+        assertEq(
+            claimableAmount,
+            0 // 10% of 10_000e8 + 2 / 12 of 9_000e8 = 1_000e8 + 1_500e8 = 2_500e8 - 4_000e8 (already claimed) -> 0
+        );
+
+        // New month, token claimed are above the possible amount with new vesting, so no new tokens are claimable
+        vm.warp(endTime + initialCliff + 2 * 30 days + 1);
+        (claimableAmount, , ) = meliesICO.getClaimableAmount(user1, 0);
+        assertEq(
+            claimableAmount,
+            0 // 10% of 10_000e8 + 3 / 12 of 9_000e8 = 1_000e8 + 2_250e8 = 3_250e8 - 4_000e8 (already claimed) -> 0
+        );
+
+        vm.warp(endTime + initialCliff + newVesting / 2 + 1);
+        (claimableAmount, , ) = meliesICO.getClaimableAmount(user1, 0);
+        assertEq(
+            claimableAmount,
+            6_250e8 - 4_000e8 // 10% of 10_000e8 + 7 / 12 of 9_000e8 = 1_000e8 + 5_250e8 = 6_250e8 - 4_000e8 (already claimed)
+        );
+
+        vm.warp(endTime + initialCliff + newVesting + 1);
+        (claimableAmount, , ) = meliesICO.getClaimableAmount(user1, 0);
+        assertEq(
+            claimableAmount,
+            6000e8, // 10% of 10_000e8 + 12 / 12 of 9_000e8 = 1_000e8 + 9_000e8 = 10_000e8 - 4_000e8 (already claimed)
+            "Should have remaining 60% available after full new vesting"
+        );
+
+        // Claim remaining tokens
+        vm.prank(user1);
+        meliesICO.claimTokens();
+
+        uint256 finalBalance = meliesToken.balanceOf(user1);
+        assertEq(finalBalance, 10000e8, "Should have claimed all tokens");
+    }
+
+    function test_AdjustCliffAndVestingMultipleRounds() public {
+        setupMultipleSaleRoundAndPurchase();
+        uint256 endTime = 2 + 14 days;
+        setupTgeTimestamp(endTime);
+        vm.warp(endTime);
+
+        // End ICO and enable claiming
+        vm.prank(admin);
+        meliesICO.endIco();
+
+        // Adjust cliff and vesting for both rounds
+        vm.startPrank(admin);
+        meliesICO.adjustCliffAndVesting(0, 45 days, 270 days);
+        meliesICO.adjustCliffAndVesting(1, 120 days, 360 days);
+        vm.stopPrank();
+
+        // Check claimable amounts for both rounds
+        vm.warp(endTime + 180 days);
+        (uint256 claimableAmount1, , ) = meliesICO.getClaimableAmount(user1, 0);
+        (uint256 claimableAmount2, , ) = meliesICO.getClaimableAmount(user1, 1);
+
+        assertEq(
+            claimableAmount1,
+            12_000e8 // 10% of 20_000e8 + [round.inf((180 - 45) / 30) + 1] -> 5 / 9 of 18_000e8 = 2_000e8 + 10_000e8 = 12_000e8
+        );
+        assertEq(
+            claimableAmount2,
+            1_250e8 // 0% of 5_000e8 + [round.inf((180 - 120) / 30) + 1] -> 3 / 12 of 5_000e8 = 0 + 1_250e8 = 1_250e8
+        );
+
+        // Claim tokens
+        vm.prank(user1);
+        meliesICO.claimTokens();
+
+        uint256 claimedBalance = meliesToken.balanceOf(user1);
+        assertEq(
+            claimedBalance,
+            13_250e8,
+            "Should have claimed tokens from both rounds"
+        );
+    }
+
     // Helper functions
 
     function setupSaleRound() internal {
@@ -696,7 +999,7 @@ contract MeliesICOVestingClaimingTest is Test {
     }
 
     function setupSaleRoundAndPurchase() internal {
-        uint256 startTime = block.timestamp;
+        uint256 startTime = 1;
         setupSaleRound();
 
         usdcToken.mint(user1, 1_000e6);

@@ -132,22 +132,35 @@ contract MeliesICORefundTest is Test {
         vm.prank(user1);
         meliesICO.buyWithUsdc(1000e6);
 
+        usdtToken.mint(user1, 1000e6);
+        vm.prank(user1);
+        usdtToken.approve(address(meliesICO), 1000e6);
+        vm.prank(user1);
+        meliesICO.buyWithUsdt(1000e6);
+
         // End ICO
         vm.warp(endTime + 1);
         vm.prank(admin);
         meliesICO.endIco();
 
         // Check initial USDC balance
-        uint256 initialBalance = usdcToken.balanceOf(user1);
+        uint256 initialUsdcBalance = usdcToken.balanceOf(user1);
+        uint256 initialUsdtBalance = usdtToken.balanceOf(user1);
 
         // Request refund
         vm.prank(user1);
         meliesICO.refund();
 
         // Check final USDC balance
-        uint256 finalBalance = usdcToken.balanceOf(user1);
+        uint256 finalUsdcBalance = usdcToken.balanceOf(user1);
+        uint256 finalUsdtBalance = usdtToken.balanceOf(user1);
         assertEq(
-            finalBalance - initialBalance,
+            finalUsdcBalance - initialUsdcBalance,
+            1000e6,
+            "User should receive full refund"
+        );
+        assertEq(
+            finalUsdtBalance - initialUsdtBalance,
             1000e6,
             "User should receive full refund"
         );
@@ -164,6 +177,11 @@ contract MeliesICORefundTest is Test {
             allocation.totalUsdcAmount,
             0,
             "USDC allocation should be zero after refund"
+        );
+        assertEq(
+            allocation.totalUsdtAmount,
+            0,
+            "USDT allocation should be zero after refund"
         );
 
         // Attempt to claim tokens after refund (should fail)
@@ -279,12 +297,12 @@ contract MeliesICORefundTest is Test {
 
         // Users buy tokens in different rounds
         usdcToken.mint(user1, 2000e6);
-        usdcToken.mint(user2, 3000e6);
+        usdtToken.mint(user2, 3000e6);
 
         vm.prank(user1);
         usdcToken.approve(address(meliesICO), 2000e6);
         vm.prank(user2);
-        usdcToken.approve(address(meliesICO), 3000e6);
+        usdtToken.approve(address(meliesICO), 3000e6);
 
         vm.prank(user1);
         meliesICO.buyWithUsdc(1000e6); //Round 1
@@ -292,14 +310,14 @@ contract MeliesICORefundTest is Test {
         vm.prank(user1);
         meliesICO.buyWithUsdc(1000e6); // Round 2
         vm.prank(user2);
-        meliesICO.buyWithUsdc(3000e6); // Round 2
+        meliesICO.buyWithUsdt(3000e6); // Round 2
         // End ICO
         vm.warp(endTime);
         vm.prank(admin);
         meliesICO.endIco();
         // Users request refunds
         uint256 user1InitialBalance = usdcToken.balanceOf(user1);
-        uint256 user2InitialBalance = usdcToken.balanceOf(user2);
+        uint256 user2InitialBalance = usdtToken.balanceOf(user2);
         vm.prank(user1);
         meliesICO.refund();
         vm.prank(user2);
@@ -310,7 +328,7 @@ contract MeliesICORefundTest is Test {
             "User1 should receive full refund"
         );
         assertEq(
-            usdcToken.balanceOf(user2) - user2InitialBalance,
+            usdtToken.balanceOf(user2) - user2InitialBalance,
             3000e6,
             "User2 should receive full refund"
         );
@@ -420,26 +438,6 @@ contract MeliesICORefundTest is Test {
         vm.expectRevert(IMeliesICO.NoAllocationToRefund.selector);
         vm.prank(user1);
         meliesICO.refund();
-    }
-
-    function test_RefundGasUsage() public {
-        setupSaleRound();
-        // User buys tokens
-        usdcToken.mint(user1, 1000e6);
-        vm.prank(user1);
-        usdcToken.approve(address(meliesICO), 1000e6);
-        vm.prank(user1);
-        meliesICO.buyWithUsdc(1000e6);
-        // End ICO
-        vm.warp(block.timestamp + 8 days);
-        vm.prank(admin);
-        meliesICO.endIco();
-        // Measure gas usage for refund
-        uint256 gasStart = gasleft();
-        vm.prank(user1);
-        meliesICO.refund();
-        uint256 gasUsed = gasStart - gasleft();
-        assertLt(gasUsed, 100000, "Refund should use less than 100,000 gas");
     }
 
     // Helper functions

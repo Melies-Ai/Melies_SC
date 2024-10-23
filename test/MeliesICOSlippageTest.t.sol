@@ -154,7 +154,7 @@ contract MeliesICOSlippageTest is Test {
     function test_BuyWithEthExceedingSlippageTolerance() public {
         setupSaleRound();
         vm.prank(admin);
-        meliesICO.updateSlippageTolerance(50); // 0.5%
+        meliesICO.updateSlippageTolerance(50); // 0.5% -> 10 for 2000 USD/ETH
 
         uint256 ethAmount = 1 ether;
         uniswapRouter.setExchangeRate(address(0), address(usdcToken), 1989); // Just below the tolerance limit

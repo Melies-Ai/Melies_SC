@@ -110,9 +110,6 @@ contract MeliesICOPurchasesTest is Test {
         // Setup sale round
         setupSaleRound();
 
-        // Set up Uniswap mock for ETH to USDC conversion
-        uniswapRouter.setExchangeRate(address(0), address(usdcToken), 2000); // 1 ETH = 2000 USDC
-
         // User buys tokens with 1 ETH
         vm.deal(user1, 1 ether);
         vm.prank(user1);
@@ -130,9 +127,6 @@ contract MeliesICOPurchasesTest is Test {
         // Setup sale round
         setupSaleRound();
 
-        // Set up Uniswap mock for ETH to USDC conversion
-        uniswapRouter.setExchangeRate(address(0), address(usdcToken), 2000); // 1 ETH = 2000 USDC
-
         // User buys tokens with 0.05 ETH (100 USDC, exact minimum)
         vm.deal(user1, 0.05 ether);
         vm.prank(user1);
@@ -149,9 +143,6 @@ contract MeliesICOPurchasesTest is Test {
     function test_BuyWithEthExactMaximumPurchase() public {
         // Setup sale round
         setupSaleRound();
-
-        // Set up Uniswap mock for ETH to USDC conversion
-        uniswapRouter.setExchangeRate(address(0), address(usdcToken), 2000); // 1 ETH = 2000 USDC
 
         // User buys tokens with 5 ETH (10,000 USDC, exact maximum)
         vm.deal(user1, 5 ether);
@@ -194,9 +185,6 @@ contract MeliesICOPurchasesTest is Test {
             lockDuration
         );
 
-        // Set up Uniswap mock for ETH to USDC conversion
-        uniswapRouter.setExchangeRate(address(0), address(usdcToken), 2000); // 1 ETH = 2000 USDC
-
         // User buys tokens with 500 ETH (1,000,000 USDC, exceeding round cap)
         vm.deal(user1, 501 ether);
         vm.expectRevert(IMeliesICO.RoundCapExceeded.selector);
@@ -208,9 +196,6 @@ contract MeliesICOPurchasesTest is Test {
         // Setup sale round
         setupSaleRound();
 
-        // Set up Uniswap mock for ETH to USDC conversion
-        uniswapRouter.setExchangeRate(address(0), address(usdcToken), 2000); // 1 ETH = 2000 USDC
-
         // User tries to buy tokens with 0.04 ETH (80 USDC, below minimum)
         vm.deal(user1, 0.04 ether);
         vm.expectRevert(IMeliesICO.BelowMinimumPurchase.selector);
@@ -221,9 +206,6 @@ contract MeliesICOPurchasesTest is Test {
     function test_BuyWithEthAboveMaximum() public {
         // Setup sale round
         setupSaleRound();
-
-        // Set up Uniswap mock for ETH to USDC conversion
-        uniswapRouter.setExchangeRate(address(0), address(usdcToken), 2000); // 1 ETH = 2000 USDC
 
         // User tries to buy tokens with 5.001 ETH (10,002 USDC, just above maximum)
         vm.deal(user1, 5.001 ether);
@@ -257,9 +239,6 @@ contract MeliesICOPurchasesTest is Test {
         // Setup sale round
         setupSaleRound();
 
-        // Set up Uniswap mock for ETH to USDC conversion
-        uniswapRouter.setExchangeRate(address(0), address(usdcToken), 2000); // 1 ETH = 2000 USDC
-
         // User buys tokens with 0.5 ETH twice
         vm.deal(user1, 1 ether);
         vm.startPrank(user1);
@@ -278,9 +257,6 @@ contract MeliesICOPurchasesTest is Test {
         uint256 startTimeRound1 = 2;
         uint256 startTimeRound2 = 2 + 7 days;
         setupMultipleSaleRounds();
-
-        // Set up Uniswap mock for ETH to USDC conversion
-        uniswapRouter.setExchangeRate(address(0), address(usdcToken), 2000); // 1 ETH = 2000 USDC
 
         vm.warp(startTimeRound1 + 1);
 
@@ -347,9 +323,6 @@ contract MeliesICOPurchasesTest is Test {
             3 days
         );
 
-        // Set up Uniswap mock for ETH to USDC conversion
-        uniswapRouter.setExchangeRate(address(0), address(usdcToken), 2000); // 1 ETH = 2000 USDC
-
         // User buys tokens with 1 ETH
         vm.deal(user1, 1 ether);
         vm.prank(user1);
@@ -389,9 +362,6 @@ contract MeliesICOPurchasesTest is Test {
             10,
             3 days
         );
-
-        // Set up Uniswap mock for ETH to USDC conversion
-        uniswapRouter.setExchangeRate(address(0), address(usdcToken), 2000); // 1 ETH = 2000 USDC
 
         // User buys tokens with 1 ETH (2000 USDC, which exceeds the soft cap)
         vm.deal(user1, 1 ether);
@@ -576,7 +546,7 @@ contract MeliesICOPurchasesTest is Test {
 
         // Try to buy tokens with 0 USDC
         vm.prank(user1);
-        vm.expectRevert(IMeliesICO.NoTokensSent.selector);
+        vm.expectRevert(IMeliesICO.UsdcAmountMustBeGreaterThanZero.selector);
         meliesICO.buyWithUsdc(0);
     }
 
@@ -708,6 +678,304 @@ contract MeliesICOPurchasesTest is Test {
 
         // Check that user received their USDC back
         assertEq(usdcToken.balanceOf(user1), 1000e6);
+    }
+
+    function test_BuyWithUsdt() public {
+        // Setup sale round
+        setupSaleRound();
+
+        // Mint USDC to user1
+        usdtToken.mint(user1, 1000e6);
+
+        // Approve ICO contract to spend user's USDC
+        vm.prank(user1);
+        usdtToken.approve(address(meliesICO), 1000e6);
+
+        // User buys tokens with 1000 USDC
+        vm.prank(user1);
+        meliesICO.buyWithUsdt(1000e6);
+
+        // Check user's allocation
+        IMeliesICO.Allocation memory allocation = meliesICO
+            .getAllocationDetails(user1, 0);
+        assertEq(allocation.totalTokenAmount, 10_000e8); // 1000 USDC / 0.1 USDC per token = 10000 tokens
+        assertEq(allocation.totalUsdtAmount, 1000e6); // 1000 USDC
+        assertEq(allocation.claimedAmount, 0);
+    }
+
+    function test_BuyWithUsdtExactMinimumPurchase() public {
+        // Setup sale round
+        setupSaleRound();
+
+        // Mint USDT to user1
+        usdtToken.mint(user1, 100e6);
+
+        // Approve ICO contract to spend user's USDT
+        vm.prank(user1);
+        usdtToken.approve(address(meliesICO), 100e6);
+
+        // User buys tokens with 100 USDT (exact minimum)
+        vm.prank(user1);
+        meliesICO.buyWithUsdt(100e6);
+
+        // Check user's allocation
+        IMeliesICO.Allocation memory allocation = meliesICO
+            .getAllocationDetails(user1, 0);
+        assertEq(allocation.totalTokenAmount, 1000e8); // 100 USDT / 0.1 USDT per token = 1000 tokens
+        assertEq(allocation.totalUsdtAmount, 100e6); // 100 USDT
+        assertEq(allocation.claimedAmount, 0);
+    }
+
+    function test_BuyWithUsdtExactMaximumPurchase() public {
+        // Setup sale round
+        setupSaleRound();
+
+        // Mint USDT to user1
+        usdtToken.mint(user1, 10_000e6);
+
+        // Approve ICO contract to spend user's USDT
+        vm.prank(user1);
+        usdtToken.approve(address(meliesICO), 10_000e6);
+
+        // User buys tokens with 10,000 USDT (exact maximum)
+        vm.prank(user1);
+        meliesICO.buyWithUsdt(10_000e6);
+
+        // Check user's allocation
+        IMeliesICO.Allocation memory allocation = meliesICO
+            .getAllocationDetails(user1, 0);
+        assertEq(allocation.totalTokenAmount, 100_000e8); // 10,000 USDT / 0.1 USDT per token = 100,000 tokens
+        assertEq(allocation.totalUsdtAmount, 10_000e6); // 10,000 USDT
+        assertEq(allocation.claimedAmount, 0);
+    }
+
+    function test_BuyWithUsdtBelowMinimum() public {
+        // Setup sale round
+        setupSaleRound();
+
+        // Mint USDT to user1
+        usdtToken.mint(user1, 99e6); // Mint 99 USDT, which is below the minimum purchase
+
+        // Approve ICO contract to spend user's USDT
+        vm.prank(user1);
+        usdtToken.approve(address(meliesICO), 99e6);
+
+        // User tries to buy tokens with 99 USDT (below minimum)
+        vm.prank(user1);
+        vm.expectRevert(IMeliesICO.BelowMinimumPurchase.selector);
+        meliesICO.buyWithUsdt(99e6);
+    }
+
+    function test_BuyWithUsdtAboveMaximum() public {
+        // Setup sale round
+        setupSaleRound();
+
+        // Mint USDT to user1
+        usdtToken.mint(user1, 10001e6);
+
+        // Approve ICO contract to spend user's USDT
+        vm.prank(user1);
+        usdtToken.approve(address(meliesICO), 10001e6);
+
+        // User tries to buy tokens with 15000 USDT (above maximum)
+        vm.prank(user1);
+        vm.expectRevert(IMeliesICO.ExceedsMaximumPurchase.selector);
+        meliesICO.buyWithUsdt(10001e6);
+    }
+
+    function test_BuyWithUsdtExceedingRoundCap() public {
+        // Add a sale round
+        uint256 startTime = block.timestamp;
+        uint256 endTime = startTime + 7 days;
+        uint256 tokenPrice = 0.1e6; // $0.1 per token
+        uint256 maxCap = 1_000_000e6; // 1 million USDT
+        uint256 softCap = 100_000e6; // 100k USDT
+        uint256 minPurchase = 100e6; // 100 USDT
+        uint256 maxPurchase = 2_000_000e6; // 2M USDT (high enough to not trigger maxPurchase error)
+        uint256 cliffDuration = 30 days;
+        uint256 vestingDuration = 180 days;
+        uint256 tgeReleasePercentage = 10;
+        uint256 lockDuration = 3 days;
+
+        meliesICO.addSaleRound(
+            startTime,
+            endTime,
+            tokenPrice,
+            maxCap,
+            softCap,
+            minPurchase,
+            maxPurchase,
+            cliffDuration,
+            vestingDuration,
+            tgeReleasePercentage,
+            lockDuration
+        );
+
+        // Mint USDT to user1
+        usdtToken.mint(user1, 1_000_001e6);
+
+        // Approve ICO contract to spend user's USDT
+        vm.prank(user1);
+        usdtToken.approve(address(meliesICO), 1_000_001e6);
+
+        // User buys tokens with 1,000,001 USDT (exceeding round cap)
+        vm.prank(user1);
+        vm.expectRevert(IMeliesICO.RoundCapExceeded.selector);
+        meliesICO.buyWithUsdt(1_000_001e6);
+    }
+
+    function test_BuyWithUsdtNoActiveRound() public {
+        // Mint USDT to user1
+        usdtToken.mint(user1, 1000e6);
+
+        // Approve ICO contract to spend user's USDT
+        vm.prank(user1);
+        usdtToken.approve(address(meliesICO), 1000e6);
+
+        // Try to buy tokens when no round is active
+        vm.prank(user1);
+        vm.expectRevert(IMeliesICO.NoActiveRound.selector);
+        meliesICO.buyWithUsdt(1000e6);
+    }
+
+    function test_BuyWithUsdtInvalidUsdtAmount() public {
+        // Setup sale round
+        setupSaleRound();
+
+        // Try to buy tokens with 0 USDT
+        vm.prank(user1);
+        vm.expectRevert(IMeliesICO.UsdtAmountMustBeGreaterThanZero.selector);
+        meliesICO.buyWithUsdt(0);
+    }
+
+    function test_BuyWithUsdtMultiplePurchases() public {
+        // Setup sale round
+        setupSaleRound();
+
+        // Mint USDT to user1
+        usdtToken.mint(user1, 2000e6);
+
+        // Approve ICO contract to spend user's USDT
+        vm.prank(user1);
+        usdtToken.approve(address(meliesICO), 2000e6);
+
+        // User buys tokens with 1000 USDT twice
+        vm.startPrank(user1);
+        meliesICO.buyWithUsdt(1000e6);
+        meliesICO.buyWithUsdt(1000e6);
+        vm.stopPrank();
+
+        // Check user's allocation
+        IMeliesICO.Allocation memory allocation = meliesICO
+            .getAllocationDetails(user1, 0);
+        assertEq(allocation.totalTokenAmount, 20000e8); // 2000 USDT / 0.1 USDT per token = 20000 tokens
+        assertEq(allocation.totalUsdtAmount, 2000e6); // 2000 USDT
+    }
+
+    function test_BuyWithUsdtMultipleRounds() public {
+        uint256 startTimeRound1 = 2;
+        uint256 startTimeRound2 = 2 + 7 days;
+        setupMultipleSaleRounds();
+
+        vm.warp(startTimeRound1 + 1);
+
+        uint256 currentRoundId = meliesICO.getCurrentRoundId();
+        assertEq(currentRoundId, 0);
+
+        // Mint USDT to user1
+        usdtToken.mint(user1, 2000e6);
+
+        // Approve ICO contract to spend user's USDT
+        vm.prank(user1);
+        usdtToken.approve(address(meliesICO), 2000e6);
+
+        // User buys tokens with 1000 USDT in the first round
+        vm.prank(user1);
+        meliesICO.buyWithUsdt(1000e6);
+
+        // Move to the second round
+        vm.warp(startTimeRound2 + 1);
+        currentRoundId = meliesICO.getCurrentRoundId();
+        assertEq(currentRoundId, 1);
+
+        // User buys tokens with 1000 USDT in the second round
+        vm.prank(user1);
+        meliesICO.buyWithUsdt(1000e6);
+
+        // Check user's allocation for both rounds
+        IMeliesICO.Allocation memory allocation1 = meliesICO
+            .getAllocationDetails(user1, 0);
+        IMeliesICO.Allocation memory allocation2 = meliesICO
+            .getAllocationDetails(user1, 1);
+
+        assertEq(allocation1.totalTokenAmount, 10000e8); // 1000 USDT / 0.1 USDT per token = 10000 tokens
+        assertEq(allocation1.totalUsdtAmount, 1000e6); // 1000 USDT
+
+        assertEq(allocation2.totalTokenAmount, 5000e8); // 1000 USDT / 0.2 USDT per token = 5000 tokens
+        assertEq(allocation2.totalUsdtAmount, 1000e6); // 1000 USDT
+    }
+
+    function test_BuyWithUsdtAfterIcoEnded() public {
+        // Setup sale round
+        setupSaleRound();
+
+        // End the ICO
+        vm.prank(admin);
+        meliesICO.endIco();
+
+        // Mint USDT to user1
+        usdtToken.mint(user1, 1000e6);
+
+        // Approve ICO contract to spend user's USDT
+        vm.prank(user1);
+        usdtToken.approve(address(meliesICO), 1000e6);
+
+        // User tries to buy tokens with USDT after ICO has ended
+        vm.prank(user1);
+        vm.expectRevert(IMeliesICO.IcoAlreadyEnded.selector);
+        meliesICO.buyWithUsdt(1000e6);
+    }
+
+    function test_BuyWithUsdtRefundScenario() public {
+        // Setup sale round with a high soft cap
+        uint256 startTime = block.timestamp;
+        uint256 endTime = startTime + 7 days;
+        meliesICO.addSaleRound(
+            startTime,
+            endTime,
+            0.1e6,
+            1_000_000e6,
+            900_000e6, // High soft cap
+            100e6,
+            10_000e6,
+            30 days,
+            180 days,
+            10,
+            3 days
+        );
+
+        // Mint USDT to user1
+        usdtToken.mint(user1, 1000e6);
+
+        // Approve ICO contract to spend user's USDT
+        vm.prank(user1);
+        usdtToken.approve(address(meliesICO), 1000e6);
+
+        // User buys tokens with 1000 USDT
+        vm.prank(user1);
+        meliesICO.buyWithUsdt(1000e6);
+
+        // End ICO
+        vm.warp(endTime + 1);
+        vm.prank(admin);
+        meliesICO.endIco();
+
+        // User requests refund
+        vm.prank(user1);
+        meliesICO.refund();
+
+        // Check that user received their USDT back
+        assertEq(usdtToken.balanceOf(user1), 1000e6);
     }
 
     function test_AddFiatPurchase() public {

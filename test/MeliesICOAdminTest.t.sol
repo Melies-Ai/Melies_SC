@@ -329,6 +329,26 @@ contract MeliesICOAdminTest is Test {
         meliesICO.withdrawUsdc();
     }
 
+    function test_OnlyAdminCanWithdrawUsdt() public {
+        setupSaleRoundAndPurchase();
+
+        vm.prank(admin);
+        meliesICO.endIco();
+
+        vm.prank(admin);
+        meliesICO.withdrawUsdt();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector,
+                user1,
+                meliesICO.ADMIN_ROLE()
+            )
+        );
+        vm.prank(user1);
+        meliesICO.withdrawUsdc();
+    }
+
     function test_OnlyAdminCanWithdrawEth() public {
         setupSaleRoundAndPurchase();
 
@@ -398,88 +418,6 @@ contract MeliesICOAdminTest is Test {
         meliesICO.endIco();
     }
 
-    function test_OnlyAdminCanUpdateCurrentRoundEndTime() public {
-        setupSaleRound();
-
-        vm.prank(admin);
-        meliesICO.updateCurrentRoundEndTime(block.timestamp + 14 days);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                user1,
-                meliesICO.ADMIN_ROLE()
-            )
-        );
-        vm.prank(user1);
-        meliesICO.updateCurrentRoundEndTime(block.timestamp + 21 days);
-    }
-
-    function test_OnlyAdminCanUpdateFutureRound() public {
-        setupMultipleSaleRounds();
-
-        vm.prank(admin);
-        meliesICO.updateFutureRound(
-            1,
-            block.timestamp + 30 days,
-            block.timestamp + 60 days,
-            0.2e6,
-            2_000_000e6,
-            200_000e6,
-            200e6,
-            20_000e6,
-            60 days,
-            360 days,
-            5,
-            14 days
-        );
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                user1,
-                meliesICO.ADMIN_ROLE()
-            )
-        );
-        vm.prank(user1);
-        meliesICO.updateFutureRound(
-            1,
-            block.timestamp + 30 days,
-            block.timestamp + 60 days,
-            0.2e6,
-            2_000_000e6,
-            200_000e6,
-            200e6,
-            20_000e6,
-            60 days,
-            360 days,
-            5,
-            14 days
-        );
-    }
-
-    function test_AdminCannotUpdateCurrentOrPastRound() public {
-        setupMultipleSaleRounds();
-        uint256 currentRoundId = 0;
-
-        vm.prank(admin);
-        vm.expectRevert(IMeliesICO.CannotModifyPastOrCurrentRound.selector);
-        meliesICO.updateFutureRound(
-            currentRoundId,
-            block.timestamp,
-            block.timestamp + 7 days,
-            0.1e6,
-            1_000_000e6,
-            100_000e6,
-            100e6,
-            10_000e6,
-            30 days,
-            180 days,
-            10,
-            7 days
-        );
-    }
-
     function test_OnlyAdminCanWithdrawRoundFunds() public {
         setupSaleRound();
         address[] memory addresses = new address[](1);
@@ -488,27 +426,31 @@ contract MeliesICOAdminTest is Test {
         meliesICO.addToWhitelist(0, addresses);
 
         vm.startPrank(user1);
-        usdcToken.mint(user1, 100_000e6);
-        usdcToken.approve(address(meliesICO), 100_000e6);
+        usdcToken.mint(user1, 50_000e6);
+        usdcToken.approve(address(meliesICO), 50_000e6);
+        usdtToken.mint(user1, 50_000e6);
+        usdtToken.approve(address(meliesICO), 50_000e6);
         meliesICO.buyWithUsdc(10_000e6);
         meliesICO.buyWithUsdc(10_000e6);
         meliesICO.buyWithUsdc(10_000e6);
         meliesICO.buyWithUsdc(10_000e6);
         meliesICO.buyWithUsdc(10_000e6);
-        meliesICO.buyWithUsdc(10_000e6);
-        meliesICO.buyWithUsdc(10_000e6);
-        meliesICO.buyWithUsdc(10_000e6);
-        meliesICO.buyWithUsdc(10_000e6);
-        meliesICO.buyWithUsdc(10_000e6);
+        meliesICO.buyWithUsdt(10_000e6);
+        meliesICO.buyWithUsdt(10_000e6);
+        meliesICO.buyWithUsdt(10_000e6);
+        meliesICO.buyWithUsdt(10_000e6);
+        meliesICO.buyWithUsdt(10_000e6);
         vm.stopPrank();
 
         vm.prank(admin);
         meliesICO.endIco();
 
+        uint256 initialUsdcBalance = usdcToken.balanceOf(admin);
+        uint256 initialUsdtBalance = usdtToken.balanceOf(admin);
         vm.prank(admin);
-        uint256 initialBalance = usdcToken.balanceOf(admin);
         meliesICO.withdrawRoundFunds(0);
-        assertEq(usdcToken.balanceOf(admin) - initialBalance, 100_000e6);
+        assertEq(usdcToken.balanceOf(admin) - initialUsdcBalance, 50_000e6);
+        assertEq(usdtToken.balanceOf(admin) - initialUsdtBalance, 50_000e6);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -519,27 +461,6 @@ contract MeliesICOAdminTest is Test {
         );
         vm.prank(user1);
         meliesICO.withdrawRoundFunds(0);
-    }
-
-    function test_AdminCannotUpdatePastOrCurrentRound() public {
-        setupMultipleSaleRounds();
-
-        vm.expectRevert(IMeliesICO.CannotModifyPastOrCurrentRound.selector);
-        vm.prank(admin);
-        meliesICO.updateFutureRound(
-            0,
-            block.timestamp + 30 days,
-            block.timestamp + 60 days,
-            0.2e6,
-            2_000_000e6,
-            200_000e6,
-            200e6,
-            20_000e6,
-            60 days,
-            360 days,
-            5,
-            14 days
-        );
     }
 
     function test_AdminCannotSetInvalidSlippageTolerance() public {
@@ -569,6 +490,30 @@ contract MeliesICOAdminTest is Test {
         vm.prank(admin);
         vm.expectRevert(IMeliesICO.CannotRecoverUsdcTokens.selector);
         meliesICO.recoverTokens(address(usdcToken), 1000e6);
+    }
+
+    function test_AdminCannotRecoverUSDTTokens() public {
+        setupSaleRound();
+        vm.prank(admin);
+        vm.expectRevert(IMeliesICO.CannotRecoverUsdtTokens.selector);
+        meliesICO.recoverTokens(address(usdtToken), 1000e6);
+    }
+
+    function test_OnlyAdminCanAdjustCliffAndVesting() public {
+        setupSaleRound();
+
+        vm.prank(admin);
+        meliesICO.adjustCliffAndVesting(0, 60 days, 240 days);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector,
+                user1,
+                meliesICO.ADMIN_ROLE()
+            )
+        );
+        vm.prank(user1);
+        meliesICO.adjustCliffAndVesting(0, 90 days, 300 days);
     }
 
     // Helper functions
@@ -623,8 +568,9 @@ contract MeliesICOAdminTest is Test {
 
     function setupSaleRoundAndPurchase() internal {
         setupSaleRound();
-        address[] memory addresses = new address[](1);
+        address[] memory addresses = new address[](2);
         addresses[0] = user1;
+        addresses[1] = user2;
         vm.prank(admin);
         meliesICO.addToWhitelist(0, addresses);
 
@@ -633,5 +579,11 @@ contract MeliesICOAdminTest is Test {
         usdcToken.approve(address(meliesICO), 1000e6);
         vm.prank(user1);
         meliesICO.buyWithUsdc(1000e6);
+
+        usdtToken.mint(user2, 1000e6);
+        vm.prank(user2);
+        usdtToken.approve(address(meliesICO), 1000e6);
+        vm.prank(user2);
+        meliesICO.buyWithUsdt(1000e6);
     }
 }

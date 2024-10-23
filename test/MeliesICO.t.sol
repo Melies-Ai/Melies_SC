@@ -208,6 +208,18 @@ contract MeliesICOTest is Test {
         vm.stopPrank();
     }
 
+    function test_TokensPurchasedEventWithUsdt() public {
+        setupSaleRound();
+        usdtToken.mint(user1, 1000e6);
+        vm.startPrank(user1);
+        usdtToken.approve(address(meliesICO), 1000e6);
+
+        vm.expectEmit(true, false, false, true);
+        emit IMeliesICO.TokensPurchased(user1, 1000e6, 10000e8);
+        meliesICO.buyWithUsdt(1000e6);
+        vm.stopPrank();
+    }
+
     function test_TokensPurchasedEventWithEth() public {
         setupSaleRound();
         vm.deal(user1, 1 ether);
@@ -280,12 +292,33 @@ contract MeliesICOTest is Test {
         meliesICO.withdrawUsdc();
     }
 
+    function test_UsdtWithdrawnEvent() public {
+        setupSaleRound();
+        usdtToken.mint(user1, 1000e6);
+        vm.prank(user1);
+        usdtToken.approve(address(meliesICO), 1000e6);
+        vm.prank(user1);
+        meliesICO.buyWithUsdt(1000e6);
+
+        vm.warp(block.timestamp + 8 days);
+        vm.prank(admin);
+        meliesICO.endIco();
+
+        vm.expectEmit(true, false, false, true);
+        emit IMeliesICO.UsdtWithdrawn(admin, 1000e6);
+        vm.prank(admin);
+        meliesICO.withdrawUsdt();
+    }
+
     function test_RefundedEvent() public {
         setupSaleRoundWithHighSoftCap();
         usdcToken.mint(user1, 1000e6);
+        usdtToken.mint(user1, 1000e6);
         vm.startPrank(user1);
         usdcToken.approve(address(meliesICO), 1000e6);
+        usdtToken.approve(address(meliesICO), 1000e6);
         meliesICO.buyWithUsdc(1000e6);
+        meliesICO.buyWithUsdt(1000e6);
         vm.stopPrank();
 
         vm.warp(block.timestamp + 8 days);
@@ -293,7 +326,7 @@ contract MeliesICOTest is Test {
         meliesICO.endIco();
 
         vm.expectEmit(true, false, false, true);
-        emit IMeliesICO.Refunded(user1, 1000e6);
+        emit IMeliesICO.Refunded(user1, 1000e6, 1000e6);
         vm.prank(user1);
         meliesICO.refundForRound(0);
     }
@@ -392,47 +425,25 @@ contract MeliesICOTest is Test {
         meliesICO.claimTokens();
     }
 
-    function test_CurrentRoundEndTimeUpdatedEvent() public {
-        setupSaleRound();
-        uint256 newEndTime = block.timestamp + 14 days;
-
-        vm.expectEmit(true, false, false, true);
-        emit IMeliesICO.CurrentRoundEndTimeUpdated(0, newEndTime);
-        vm.prank(admin);
-        meliesICO.updateCurrentRoundEndTime(newEndTime);
-    }
-
     function test_FutureRoundUpdatedEvent() public {
         setupMultipleSaleRounds();
-        uint256 newStartTime = block.timestamp + 15 days;
-        uint256 newEndTime = newStartTime + 7 days;
         vm.warp(2);
 
         vm.expectEmit(true, false, false, true);
         emit IMeliesICO.FutureRoundUpdated(1);
         vm.prank(admin);
-        meliesICO.updateFutureRound(
-            1,
-            newStartTime,
-            newEndTime,
-            0.2e6,
-            2_000_000e6,
-            200_000e6,
-            200e6,
-            20_000e6,
-            90 days,
-            240 days,
-            0,
-            0
-        );
+        meliesICO.updateFutureRound(1, 2_000_000e6, 20_000e6);
     }
 
     function test_RoundFundsWithdrawnEvent() public {
         setupSaleRound();
         usdcToken.mint(user1, 100_000e6);
+        usdtToken.mint(user1, 100_000e6);
         vm.startPrank(user1);
         usdcToken.approve(address(meliesICO), 100_000e6);
+        usdtToken.approve(address(meliesICO), 100_000e6);
         meliesICO.buyWithUsdc(100_000e6);
+        meliesICO.buyWithUsdt(100_000e6);
         vm.stopPrank();
 
         vm.warp(block.timestamp + 8 days);
@@ -440,7 +451,7 @@ contract MeliesICOTest is Test {
         meliesICO.endIco();
 
         vm.expectEmit(true, false, false, true);
-        emit IMeliesICO.RoundFundsWithdrawn(0, 100_000e6);
+        emit IMeliesICO.RoundFundsWithdrawn(0, 100_000e6, 100_000e6);
         vm.prank(admin);
         meliesICO.withdrawRoundFunds(0);
     }
