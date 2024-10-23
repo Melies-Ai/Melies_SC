@@ -17,9 +17,11 @@ contract Melies is ERC20, ERC20Pausable, AccessControl, ERC20Permit {
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
+    bytes32 public constant DAO_ADMIN_ROLE = keccak256("DAO_ADMIN_ROLE");
 
     // Maximum total supply for the token
-    uint256 private constant MAX_TOTAL_SUPPLY = 1_000_000_000 * 1e8;
+    uint256 public constant MIN_MAX_TOTAL_SUPPLY = 100_000_000e8;
+    uint256 public maxTotalSupply = 100_000_000e8;
 
     // Sructure for locked tokens
     struct LockedTokens {
@@ -58,6 +60,16 @@ contract Melies is ERC20, ERC20Pausable, AccessControl, ERC20Permit {
      * @param amount The amount of tokens released.
      */
     event LockedTokensReleased(address indexed account, uint256 amount);
+
+    /**
+     * @dev Error thrown when attempting to set an invalid max total supply.
+     * @param newMaxSupply The invalid max supply amount attempted to be set.
+     * @param currentTotalSupply The current total supply of tokens.
+     */
+    error InvalidMaxTotalSupply(
+        uint256 newMaxSupply,
+        uint256 currentTotalSupply
+    );
 
     /**
      * @dev Constructor that sets up the token with initial roles
@@ -105,13 +117,13 @@ contract Melies is ERC20, ERC20Pausable, AccessControl, ERC20Permit {
      * See {ERC20-_mint}.
      * Requirements:
      * - the caller must have the `MINTER_ROLE`.
-     * - the total supply after minting must not exceed MAX_TOTAL_SUPPLY.
+     * - the total supply after minting must not exceed maxTotalSupply.
      * @param to The address that will receive the minted tokens
      * @param amount The amount of tokens to mint
      */
     function mint(address to, uint256 amount) public onlyRole(MINTER_ROLE) {
         uint256 totalSupply = totalSupply();
-        if (amount + totalSupply > MAX_TOTAL_SUPPLY) {
+        if (amount + totalSupply > maxTotalSupply) {
             revert ERC20MarketCapExceeded(amount, totalSupply);
         }
         _mint(to, amount);
@@ -129,7 +141,7 @@ contract Melies is ERC20, ERC20Pausable, AccessControl, ERC20Permit {
         uint256 lockDuration
     ) public onlyRole(MINTER_ROLE) {
         uint256 totalSupply = totalSupply();
-        if (amount + totalSupply > MAX_TOTAL_SUPPLY) {
+        if (amount + totalSupply > maxTotalSupply) {
             revert ERC20MarketCapExceeded(amount, totalSupply);
         }
         _mint(to, amount);
@@ -167,6 +179,26 @@ contract Melies is ERC20, ERC20Pausable, AccessControl, ERC20Permit {
         if (totalReleased == 0) revert NoTokensToRelease();
 
         emit LockedTokensReleased(msg.sender, totalReleased);
+    }
+
+    /**
+     * @dev Changes the maximum total supply of the token.
+     * Requirements:
+     * - the caller must have the `DAO_ADMIN_ROLE`.
+     * - the new max supply must be greater than or equal to the current total supply.
+     * @param newMaxSupply The new maximum total supply to set
+     */
+    function setMaxTotalSupply(
+        uint256 newMaxSupply
+    ) public onlyRole(DAO_ADMIN_ROLE) {
+        uint256 currentTotalSupply = totalSupply();
+        if (
+            newMaxSupply < currentTotalSupply ||
+            newMaxSupply < MIN_MAX_TOTAL_SUPPLY
+        ) {
+            revert InvalidMaxTotalSupply(newMaxSupply, currentTotalSupply);
+        }
+        maxTotalSupply = newMaxSupply;
     }
 
     /**

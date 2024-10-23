@@ -458,7 +458,7 @@ contract MeliesICOVestingClaimingTest is Test {
         meliesICO.addSaleRound(
             startTime,
             endTime,
-            0.001e6, // $0.001 per token
+            0.01e6, // $0.001 per token
             1_000_000e6,
             100_000e6,
             100e6,
@@ -474,7 +474,7 @@ contract MeliesICOVestingClaimingTest is Test {
         usdcToken.mint(user1, 1_000_000e6);
         vm.startPrank(user1);
         usdcToken.approve(address(meliesICO), 1_000_000e6);
-        meliesICO.buyWithUsdc(1_000_000e6); // 1_000_000_000 tokens
+        meliesICO.buyWithUsdc(1_000_000e6); // 100_000_000 tokens
         vm.stopPrank();
 
         // End ICO and enable claiming
@@ -488,7 +488,7 @@ contract MeliesICOVestingClaimingTest is Test {
         (uint256 claimableAmount, , ) = meliesICO.getClaimableAmount(user1, 0);
         assertEq(
             claimableAmount,
-            700_000_000e8 // 10% of 1_000_000_000 = 100_000_000 + 4 * 900_000_000 / 6 = 700_000_000
+            70_000_000e8 // 10% of 100_000_000 = 10_000_000 + 4 * 90_000_000 / 6 = 70_000_000
         );
 
         // Claim tokens
@@ -496,21 +496,21 @@ contract MeliesICOVestingClaimingTest is Test {
         meliesICO.claimTokens();
 
         // Verify claimed amount
-        assertEq(meliesToken.balanceOf(user1), 700_000_000e8);
+        assertEq(meliesToken.balanceOf(user1), 70_000_000e8);
 
         // Fast forward to end of vesting
         vm.warp(endTime + 30 days + 180 days + 1);
 
         // Check claimable amount
         (claimableAmount, , ) = meliesICO.getClaimableAmount(user1, 0);
-        assertEq(claimableAmount, 300_000_000e8);
+        assertEq(claimableAmount, 30_000_000e8);
 
         // Claim tokens
         vm.prank(user1);
         meliesICO.claimTokens();
 
         // Verify claimed amount
-        assertEq(meliesToken.balanceOf(user1), 1_000_000_000e8);
+        assertEq(meliesToken.balanceOf(user1), 100_000_000e8);
     }
 
     function test_VestingWithMultiplePurchasesInSameRound() public {

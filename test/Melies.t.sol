@@ -10,7 +10,7 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 /// @notice This contract contains comprehensive tests for the Melies ERC20 token,
 /// covering all major functionalities, edge cases, and security aspects.
 contract MeliesTest is Test {
-    uint256 constant maxSupply = 1_000_000_000 * 1e8;
+    uint256 constant maxSupply = 100_000_000e8;
     Melies public meliesToken;
     uint256 public tgeTimestamp;
     address public admin;
@@ -20,6 +20,7 @@ contract MeliesTest is Test {
     address public user;
     address public user2;
     address public user3;
+    address public daoAdmin;
 
     // Custom error selectors
     bytes4 private constant UNAUTHORIZED_SELECTOR =
@@ -41,6 +42,7 @@ contract MeliesTest is Test {
         user = address(0x4);
         user2 = address(0x5);
         user3 = address(0x6);
+        daoAdmin = address(0x7);
 
         tgeTimestamp = block.timestamp + 21 days;
 
@@ -50,6 +52,7 @@ contract MeliesTest is Test {
         meliesToken.grantRole(meliesToken.PAUSER_ROLE(), pauser);
         meliesToken.grantRole(meliesToken.MINTER_ROLE(), minter);
         meliesToken.grantRole(meliesToken.BURNER_ROLE(), burner);
+        meliesToken.grantRole(meliesToken.DAO_ADMIN_ROLE(), daoAdmin);
         vm.stopPrank();
     }
 
@@ -708,5 +711,87 @@ contract MeliesTest is Test {
 
         assertEq(meliesToken.getLockedBalance(user), amount2 + amount3);
         assertEq(meliesToken.balanceOf(user), amount1 + amount2 + amount3);
+    }
+
+    // MAX SUPPLY FUNCTIONALITY TESTS
+
+    /// @notice Test setting max total supply by DAO member
+    function test_SetMaxTotalSupply() public {
+        uint256 newMaxSupply = 200_000_000e8;
+
+        vm.prank(daoAdmin);
+        meliesToken.setMaxTotalSupply(newMaxSupply);
+
+        assertEq(meliesToken.maxTotalSupply(), newMaxSupply);
+    }
+
+    /// @notice Test setting max total supply below MIN_MAX_TOTAL_SUPPLY
+    function test_SetMaxTotalSupplyBelowMinimum() public {
+        uint256 newMaxSupply = 50_000_000e8; // Below MIN_MAX_TOTAL_SUPPLY
+
+        vm.prank(daoAdmin);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Melies.InvalidMaxTotalSupply.selector,
+                newMaxSupply,
+                0
+            )
+        );
+        meliesToken.setMaxTotalSupply(newMaxSupply);
+    }
+
+    /// @notice Test setting max total supply below current total supply
+    function test_SetMaxTotalSupplyBelowCurrentSupply() public {
+        vm.prank(daoAdmin);
+        meliesToken.setMaxTotalSupply(150_000_000e8);
+
+        uint256 initialMint = 150_000_000e8;
+        vm.prank(minter);
+        meliesToken.mint(user, initialMint);
+
+        uint256 newMaxSupply = 100_000_000e8; // Below current total supply
+
+        vm.prank(daoAdmin);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Melies.InvalidMaxTotalSupply.selector,
+                newMaxSupply,
+                initialMint
+            )
+        );
+        meliesToken.setMaxTotalSupply(newMaxSupply);
+    }
+
+    /// @notice Test setting max total supply by non-DAO member
+    function test_SetMaxTotalSupplyUnauthorized() public {
+        uint256 newMaxSupply = 200_000_000e8;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                UNAUTHORIZED_SELECTOR,
+                user,
+                meliesToken.DAO_ADMIN_ROLE()
+            )
+        );
+        vm.prank(user);
+        meliesToken.setMaxTotalSupply(newMaxSupply);
+    }
+
+    /// @notice Test minting after increasing max total supply
+    function test_MintAfterIncreasingMaxTotalSupply() public {
+        uint256 initialMint = maxSupply;
+        vm.prank(minter);
+        meliesToken.mint(user, initialMint);
+
+        uint256 newMaxSupply = 200_000_000e8;
+        vm.prank(daoAdmin);
+        meliesToken.setMaxTotalSupply(newMaxSupply);
+
+        uint256 additionalMint = 50_000_000e8;
+        vm.prank(minter);
+        meliesToken.mint(user, additionalMint);
+
+        assertEq(meliesToken.totalSupply(), initialMint + additionalMint);
+        assertEq(meliesToken.balanceOf(user), initialMint + additionalMint);
     }
 }
