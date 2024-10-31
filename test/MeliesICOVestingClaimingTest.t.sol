@@ -655,8 +655,6 @@ contract MeliesICOVestingClaimingTest is Test {
     function test_AdjustCliffAndVestingExceedsMaxDuration() public {
         setupSaleRound();
         uint256 endTime = 2 + 7 days;
-        uint256 initialCliff = 30 days;
-        uint256 initialVesting = 180 days;
 
         vm.warp(endTime + 1);
 
@@ -674,7 +672,6 @@ contract MeliesICOVestingClaimingTest is Test {
     function test_AdjustCliffOnly() public {
         setupSaleRound();
         uint256 endTime = block.timestamp + 7 days;
-        uint256 initialCliff = 30 days;
         uint256 initialVesting = 180 days;
         uint256 newCliff = 60 days;
 
@@ -714,7 +711,6 @@ contract MeliesICOVestingClaimingTest is Test {
         setupSaleRound();
         uint256 endTime = block.timestamp + 7 days;
         uint256 initialCliff = 30 days;
-        uint256 initialVesting = 180 days;
         uint256 newVesting = 240 days;
 
         vm.warp(endTime + initialCliff + 1);
