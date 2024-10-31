@@ -6,13 +6,20 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Pausable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
 
 /**
  * @title Melies (MEL) Token
  * @dev Implementation of the MEL token with pausable, mintable, and burnable features.
  * This contract extends ERC20 with additional functionality from OpenZeppelin libraries.
  */
-contract Melies is ERC20, ERC20Pausable, AccessControl, ERC20Permit {
+contract Melies is
+    ERC20,
+    ERC20Pausable,
+    AccessControl,
+    ERC20Permit,
+    ERC20Votes
+{
     // Role definitions using keccak256 hashes
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
@@ -257,7 +264,7 @@ contract Melies is ERC20, ERC20Pausable, AccessControl, ERC20Permit {
         address from,
         address to,
         uint256 value
-    ) internal override(ERC20, ERC20Pausable) {
+    ) internal override(ERC20, ERC20Pausable, ERC20Votes) {
         if (from != address(0)) {
             uint256 availableBalance;
             if (_lockedTokens[from].length > 0) {
@@ -277,5 +284,16 @@ contract Melies is ERC20, ERC20Pausable, AccessControl, ERC20Permit {
             }
         }
         super._update(from, to, value);
+    }
+
+    /**
+     * @dev Overrides the nonces function to return the nonces from the ERC20Permit contract.
+     * @param owner The address to get the nonces for
+     * @return The nonces for the address
+     */
+    function nonces(
+        address owner
+    ) public view override(ERC20Permit, Nonces) returns (uint256) {
+        return super.nonces(owner);
     }
 }
