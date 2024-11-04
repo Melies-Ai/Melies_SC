@@ -82,6 +82,10 @@ contract MeliesStakingTest is Test {
 
         // Grant ADMIN_ROLE to admin in staking contract
         stakingContract.grantRole(ADMIN_ROLE, admin);
+        meliesToken.grantRole(
+            meliesToken.STAKER_CONTRACT_ROLE(),
+            address(stakingContract)
+        );
     }
 
     function test_Stake() public {

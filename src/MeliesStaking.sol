@@ -8,6 +8,8 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
+import "./Melies.sol";
+
 /**
  * @title MeliesStaking
  * @dev Manages the staking mechanism for Melies tokens.
@@ -17,6 +19,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
  */
 contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
+    using SafeERC20 for Melies;
 
     /**
      * @dev Struct to store staking information for each user's stake
@@ -47,7 +50,7 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
     error InvalidMultiplier();
     error DailyBudgetMustBeGreaterThanZero();
 
-    IERC20 public meliesToken;
+    Melies public meliesToken;
 
     uint256 private constant ANNUAL_BUDGET = 2_280_000e8; // 2.28M tokens
     uint256 public DAILY_BUDGET_TARGET =
@@ -84,7 +87,7 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
      * @param _tgeTimestamp Timestamp for the Token Generation Event (TGE)
      */
     constructor(address _meliesToken, uint32 _tgeTimestamp) {
-        meliesToken = IERC20(_meliesToken);
+        meliesToken = Melies(_meliesToken);
         tgeTimestamp = _tgeTimestamp;
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(ADMIN_ROLE, msg.sender);
@@ -141,6 +144,13 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
         if (userStakes[msg.sender].length == 1) {
             stakers.push(msg.sender);
         }
+
+        // Update voting power
+        meliesToken.updateVotingPowerOnStaking(
+            address(this),
+            msg.sender,
+            _amount
+        );
 
         emit Staked(msg.sender, _amount, _durationIndex);
     }
@@ -206,6 +216,13 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
             ];
             userStakes[msg.sender].pop();
         }
+
+        // Update voting power
+        meliesToken.updateVotingPowerOnStaking(
+            msg.sender,
+            address(this),
+            amountWithPrecision / 10 ** PRECISION_FACTOR
+        );
 
         emit Unstaked(
             msg.sender,
@@ -323,10 +340,12 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
         // initialize index to last processed index (if last update was unfinished, else 0)
         uint32 i = lastProcessedIndex;
         uint32 j = lastProcessedStakeIndex;
+        uint256 totalCompoundRewardsWithPrecision;
 
         // Update rewards for stakers until we run out of gas or process all stakers
         while (i < stakers.length && gasleft() > GAS_LIMIT_EXECUTION) {
             address user = stakers[i];
+            totalCompoundRewardsWithPrecision = 0;
             if (userStakes[user].length == 0) {
                 // Remove user from stakers array if they have no stakes
                 stakers[i] = stakers[stakers.length - 1];
@@ -356,6 +375,7 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
                             .ponderatedAmountWithPrecision += ponderatedRewardsWithPrecision;
                         addToTotalStaked += rewardsWithPrecision;
                         addToTotalPonderatedStaked += ponderatedRewardsWithPrecision;
+                        totalCompoundRewardsWithPrecision += rewardsWithPrecision;
                     } else {
                         // Add rewards to the stake reward
                         userStake
@@ -372,6 +392,16 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
                 if (j >= userStakes[user].length) {
                     j = 0;
                     i++;
+
+                    if (totalCompoundRewardsWithPrecision > 0) {
+                        // Update voting power
+                        meliesToken.updateVotingPowerOnStaking(
+                            address(this),
+                            user,
+                            totalCompoundRewardsWithPrecision /
+                                10 ** PRECISION_FACTOR
+                        );
+                    }
                 }
             }
         }
@@ -450,6 +480,20 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
         address user
     ) external view returns (StakingInfo[] memory) {
         return userStakes[user];
+    }
+
+    /**
+     * @dev Returns the total amount of stakes for a specific user
+     * @param user Address of the user
+     * @return totalStakes Total amount of stakes for the user
+     */
+    function getTotalUserStakes(
+        address user
+    ) external view returns (uint256 totalStakes) {
+        for (uint256 i = 0; i < userStakes[user].length; i++) {
+            totalStakes += userStakes[user][i].amountWithPrecision;
+        }
+        totalStakes /= 10 ** PRECISION_FACTOR;
     }
 
     /**

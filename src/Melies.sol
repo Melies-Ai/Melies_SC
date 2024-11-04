@@ -7,6 +7,7 @@ import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Pausable.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Votes.sol";
+import "./MeliesStaking.sol";
 
 /**
  * @title Melies (MEL) Token
@@ -24,11 +25,15 @@ contract Melies is
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
     bytes32 public constant BURNER_ROLE = keccak256("BURNER_ROLE");
+    bytes32 public constant STAKER_CONTRACT_ROLE =
+        keccak256("STAKER_CONTRACT_ROLE");
     bytes32 public constant DAO_ADMIN_ROLE = keccak256("DAO_ADMIN_ROLE");
 
     // Maximum total supply for the token
     uint256 public constant MIN_MAX_TOTAL_SUPPLY = 100_000_000e8;
     uint256 public maxTotalSupply = 100_000_000e8;
+
+    address public _stakingContract;
 
     // Sructure for locked tokens
     struct LockedTokens {
@@ -79,6 +84,16 @@ contract Melies is
     );
 
     /**
+     * @dev Error thrown when attempting to set the staking contract address more than once.
+     */
+    error StakingContractAlreadySet();
+
+    /**
+     * @dev Error thrown when attempting to get voting units without setting the staking contract address.
+     */
+    error StakingContractNotSet();
+
+    /**
      * @dev Constructor that sets up the token with initial roles
      * @param defaultAdmin Address to be granted the default admin role
      * @param initialTgeTimestamp The initial timestamp for the TGE date
@@ -89,6 +104,19 @@ contract Melies is
     ) ERC20("Melies", "MEL") ERC20Permit("Melies") {
         _grantRole(DEFAULT_ADMIN_ROLE, defaultAdmin);
         tgeTimestamp = initialTgeTimestamp;
+    }
+
+    /**
+     * @dev Sets the staking contract address.
+     * @param stakingContract The address of the staking contract
+     */
+    function setStakingContract(
+        address stakingContract
+    ) public onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (_stakingContract != address(0)) {
+            revert StakingContractAlreadySet();
+        }
+        _stakingContract = stakingContract;
     }
 
     /**
@@ -209,6 +237,22 @@ contract Melies is
     }
 
     /**
+     * @dev Returns the voting units for an account.
+     * @param account The address to get the voting units for
+     * @return The voting units for the account
+     */
+    function _getVotingUnits(
+        address account
+    ) internal view virtual override returns (uint256) {
+        if (_stakingContract == address(0)) {
+            revert StakingContractNotSet();
+        }
+        uint256 totalStakes = MeliesStaking(_stakingContract)
+            .getTotalUserStakes(account);
+        return balanceOf(account) + totalStakes;
+    }
+
+    /**
      * @dev Returns the total amount of locked tokens for an address.
      * @param account The address to check for locked tokens
      * @return The total amount of locked tokens
@@ -283,7 +327,21 @@ contract Melies is
                 revert InsufficientUnlockedBalance(availableBalance, value);
             }
         }
+
         super._update(from, to, value);
+    }
+
+    /**
+     * @dev Move voting power when tokens are transferred.
+     *
+     * Emits a {IVotes-DelegateVotesChanged} event.
+     */
+    function updateVotingPowerOnStaking(
+        address from,
+        address to,
+        uint256 value
+    ) external onlyRole(STAKER_CONTRACT_ROLE) {
+        _transferVotingUnits(from, to, value);
     }
 
     /**
