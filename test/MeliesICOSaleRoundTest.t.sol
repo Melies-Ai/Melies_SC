@@ -8,14 +8,14 @@ import "../src/Melies.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/IAccessControl.sol";
 
-import {MockMelies, MockMeliesICO} from "../src/mock/MockMelies.sol";
+import {MockMeliesICO} from "../src/mock/MockMelies.sol";
 import {MockERC20} from "../src/mock/MockERC20.sol";
 import {MockUniswapV2Router02} from "../src/mock/MockUniswapV2Router02.sol";
 import {MockChainlinkAggregator} from "../src/mock/MockChainlinkAggregator.sol";
 
 contract MeliesICOSaleRoundTest is Test {
     MockMeliesICO public meliesICO;
-    MockMelies public meliesToken;
+    Melies public meliesToken;
     uint256 public tgeTimestamp;
     MockERC20 public usdcToken;
     MockERC20 public usdtToken;
@@ -44,7 +44,7 @@ contract MeliesICOSaleRoundTest is Test {
         user2 = address(0x5);
 
         tgeTimestamp = block.timestamp + 21 days;
-        meliesToken = new MockMelies(admin, tgeTimestamp);
+        meliesToken = new Melies(admin);
 
         vm.startPrank(admin);
         meliesToken.grantRole(meliesToken.PAUSER_ROLE(), pauser);
@@ -118,7 +118,6 @@ contract MeliesICOSaleRoundTest is Test {
         uint256 cliffDuration = 30 days;
         uint256 vestingDuration = 180 days;
         uint256 tgeReleasePercentage = 10; // 10% TGE release
-        uint256 lockDuration = 0; // No lock period
 
         vm.prank(admin);
         meliesICO.addSaleRound(
@@ -131,8 +130,7 @@ contract MeliesICOSaleRoundTest is Test {
             maxPurchase,
             cliffDuration,
             vestingDuration,
-            tgeReleasePercentage,
-            lockDuration
+            tgeReleasePercentage
         );
 
         (
@@ -149,8 +147,7 @@ contract MeliesICOSaleRoundTest is Test {
             ,
             uint256 roundCliffDuration,
             uint256 roundVestingDuration,
-            uint256 roundTgeReleasePercentage,
-            uint256 roundLockDuration
+            uint256 roundTgeReleasePercentage
         ) = meliesICO.saleRounds(0);
 
         assertEq(roundStartTime, startTime);
@@ -163,7 +160,6 @@ contract MeliesICOSaleRoundTest is Test {
         assertEq(roundCliffDuration, cliffDuration);
         assertEq(roundVestingDuration, vestingDuration);
         assertEq(roundTgeReleasePercentage, tgeReleasePercentage);
-        assertEq(roundLockDuration, lockDuration);
     }
 
     function test_AddMultipleSaleRounds() public {
@@ -181,16 +177,15 @@ contract MeliesICOSaleRoundTest is Test {
                 10000,
                 30 days,
                 180 days,
-                10, // 10% TGE release
-                0 // No lock period
+                10 // 10% TGE release
             );
         }
 
-        (uint256 round0StartTime, , , , , , , , , , , , , , ) = meliesICO
+        (uint256 round0StartTime, , , , , , , , , , , , , ) = meliesICO
             .saleRounds(0);
-        (uint256 round1StartTime, , , , , , , , , , , , , , ) = meliesICO
+        (uint256 round1StartTime, , , , , , , , , , , , , ) = meliesICO
             .saleRounds(1);
-        (uint256 round2StartTime, , , , , , , , , , , , , , ) = meliesICO
+        (uint256 round2StartTime, , , , , , , , , , , , , ) = meliesICO
             .saleRounds(2);
 
         assertEq(round0StartTime, startTime);
@@ -214,8 +209,7 @@ contract MeliesICOSaleRoundTest is Test {
             10000,
             30 days,
             180 days,
-            10, // 10% TGE release
-            0 // No lock period
+            10 // 10% TGE release
         );
     }
 
@@ -283,7 +277,6 @@ contract MeliesICOSaleRoundTest is Test {
             ,
             ,
             uint256 updatedMaxPurchase,
-            ,
             ,
             ,
             ,
@@ -373,8 +366,7 @@ contract MeliesICOSaleRoundTest is Test {
             10_000e6,
             30 days,
             180 days,
-            10,
-            7
+            10
         );
     }
 
@@ -395,8 +387,7 @@ contract MeliesICOSaleRoundTest is Test {
             10_000e6,
             30 days,
             180 days,
-            10,
-            7
+            10
         );
 
         meliesICO.addSaleRound(
@@ -409,7 +400,6 @@ contract MeliesICOSaleRoundTest is Test {
             20_000e6,
             90 days,
             240 days,
-            0,
             0
         );
         vm.stopPrank();
@@ -496,6 +486,5 @@ contract MeliesICOSaleRoundTest is Test {
 
     function setupTgeTimestamp(uint newTgeTimestamp) internal {
         meliesICO.setTgeTimestamp(newTgeTimestamp);
-        meliesToken.setTgeTimestamp(newTgeTimestamp);
     }
 }

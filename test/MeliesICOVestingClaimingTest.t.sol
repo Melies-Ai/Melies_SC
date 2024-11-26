@@ -8,14 +8,14 @@ import "../src/Melies.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/IAccessControl.sol";
 
-import {MockMelies, MockMeliesICO} from "../src/mock/MockMelies.sol";
+import {MockMeliesICO} from "../src/mock/MockMelies.sol";
 import {MockERC20} from "../src/mock/MockERC20.sol";
 import {MockUniswapV2Router02} from "../src/mock/MockUniswapV2Router02.sol";
 import {MockChainlinkAggregator} from "../src/mock/MockChainlinkAggregator.sol";
 
 contract MeliesICOVestingClaimingTest is Test {
     MockMeliesICO public meliesICO;
-    MockMelies public meliesToken;
+    Melies public meliesToken;
     uint256 public tgeTimestamp;
     MockERC20 public usdcToken;
     MockERC20 public usdtToken;
@@ -44,7 +44,7 @@ contract MeliesICOVestingClaimingTest is Test {
         user2 = address(0x5);
 
         tgeTimestamp = block.timestamp + 21 days;
-        meliesToken = new MockMelies(admin, tgeTimestamp);
+        meliesToken = new Melies(admin);
 
         vm.startPrank(admin);
         meliesToken.grantRole(meliesToken.PAUSER_ROLE(), pauser);
@@ -233,8 +233,7 @@ contract MeliesICOVestingClaimingTest is Test {
             100_000e6,
             0, // No cliff
             180 days,
-            10, // TGE release percentage
-            3 days // Lock duration
+            10 // TGE release percentage
         );
         setupTgeTimestamp(endTime);
 
@@ -276,8 +275,7 @@ contract MeliesICOVestingClaimingTest is Test {
             100_000e6,
             30 days,
             60 days,
-            0, // TGE release percentage
-            3 days // Lock duration
+            0 // TGE release percentage
         );
         setupTgeTimestamp(endTime);
 
@@ -423,8 +421,7 @@ contract MeliesICOVestingClaimingTest is Test {
             100_000e6,
             300 days,
             600 days,
-            0, // TGE release percentage
-            3 days // Lock duration
+            0 // TGE release percentage
         );
         setupTgeTimestamp(endTime);
 
@@ -465,8 +462,7 @@ contract MeliesICOVestingClaimingTest is Test {
             1_000_000e6,
             30 days,
             180 days,
-            10, // TGE release percentage
-            3 days // Lock duration
+            10 // TGE release percentage
         );
         setupTgeTimestamp(endTime);
 
@@ -555,8 +551,7 @@ contract MeliesICOVestingClaimingTest is Test {
             10_000e6,
             30 days,
             180 days,
-            10, // TGE release percentage
-            3 days // Lock duration
+            10 // TGE release percentage
         );
 
         // User buys tokens
@@ -696,7 +691,6 @@ contract MeliesICOVestingClaimingTest is Test {
             ,
             uint256 cliffDuration,
             uint256 vestingDuration,
-            ,
 
         ) = meliesICO.saleRounds(0);
         assertEq(cliffDuration, newCliff, "Cliff duration should be updated");
@@ -734,7 +728,6 @@ contract MeliesICOVestingClaimingTest is Test {
             ,
             uint256 cliffDuration,
             uint256 vestingDuration,
-            ,
 
         ) = meliesICO.saleRounds(0);
         assertEq(
@@ -773,7 +766,6 @@ contract MeliesICOVestingClaimingTest is Test {
             ,
             uint256 cliffDuration,
             uint256 vestingDuration,
-            ,
 
         ) = meliesICO.saleRounds(0);
         assertEq(cliffDuration, newCliff, "Cliff duration should be updated");
@@ -952,8 +944,7 @@ contract MeliesICOVestingClaimingTest is Test {
             10_000e6,
             30 days,
             180 days,
-            10,
-            7
+            10
         );
     }
 
@@ -974,8 +965,7 @@ contract MeliesICOVestingClaimingTest is Test {
             10_000e6,
             30 days,
             180 days,
-            10,
-            7
+            10
         );
 
         meliesICO.addSaleRound(
@@ -988,7 +978,6 @@ contract MeliesICOVestingClaimingTest is Test {
             20_000e6,
             90 days,
             240 days,
-            0,
             0
         );
         vm.stopPrank();
@@ -1075,6 +1064,5 @@ contract MeliesICOVestingClaimingTest is Test {
 
     function setupTgeTimestamp(uint newTgeTimestamp) internal {
         meliesICO.setTgeTimestamp(newTgeTimestamp);
-        meliesToken.setTgeTimestamp(newTgeTimestamp);
     }
 }

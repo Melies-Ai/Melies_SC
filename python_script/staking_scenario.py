@@ -23,18 +23,13 @@ class StakingSystem:
         self.stakes.append(stake)
         self.total_ponderated_stake += stake.amount * stake.multiplier
 
-    def unstake(self, owner, stake_index, amount):
+    def unstake(self, owner, stake_index):
         stakes_by_owner = [s for s in self.stakes if s.owner == owner]
         if 0 <= stake_index < len(stakes_by_owner):
             stake = stakes_by_owner[stake_index]
-            if amount > stake.amount:
-                return Decimal('0')
-            self.total_ponderated_stake -= amount * stake.multiplier
-            stake.amount -= amount
-            total_return = amount + stake.rewards
-            stake.rewards = Decimal('0')
-            if stake.amount == Decimal('0'):
-                self.stakes.remove(stake)
+            self.total_ponderated_stake -= stake.amount * stake.multiplier
+            total_return = stake.amount + stake.rewards
+            self.stakes.remove(stake)
             return total_return
         return Decimal('0')
 
@@ -59,10 +54,10 @@ class StakingSystem:
             print(f"Date: {self.current_date}")
             for stake in self.stakes:
                 if stake.multiplier == 1:
-                    print(f"{stake.owner}: {stake.amount} (x1) + {stake.rewards}")
+                    print(f"{stake.owner}: {stake.amount+stake.rewards:,.4f} = {stake.amount:,.4f} (x1) + {stake.rewards:,.2f}")
                 else:
-                    print(f"{stake.owner}: {stake.amount} (x{stake.multiplier})")
-            print(f"Total ponderated Stake: {self.total_ponderated_stake}")
+                    print(f"{stake.owner}: {stake.amount:,.4f} (x{stake.multiplier})")
+            print(f"Total ponderated Stake: {self.total_ponderated_stake:,.4f}")
             print("--------------------")
         else:
             print(f"{int(self.total_ponderated_stake):.3f}")  # Rounded down total ponderated stake
@@ -75,7 +70,7 @@ system.add_stake("Bob", Decimal('1000.0e8'), Decimal('1.6'))
 
 # Day 2
 system.simulate_day()
-system.add_stake("Alice", Decimal('100.0e8'), Decimal('1'))
+system.add_stake("Alice", Decimal('150.0e8'), Decimal('1'))
 
 # Day 5
 system.simulate_day()
@@ -97,9 +92,8 @@ for _ in range(12):
 
 # Day 23
 system.simulate_day()
-print("Day 23")
 system.print_status(True)
-unstaked_amount = system.unstake("Alice", 0, Decimal('100.0e8'))
+unstaked_amount = system.unstake("Alice", 0)
 
 # Day 95
 for _ in range(72):
@@ -107,9 +101,8 @@ for _ in range(72):
 
 # Day 96
 system.simulate_day()
-print("Day 96")
 system.print_status(True)
-unstaked_amount = system.unstake("Bob", 1, Decimal('804149589441'))
+unstaked_amount = system.unstake("Bob", 1)
 
 # Day 107
 for _ in range(11):
@@ -125,22 +118,17 @@ for _ in range(87):
 
 # Day 196
 system.simulate_day()
-print("Day 196")
 system.print_status(True)
-unstaked_amount = system.unstake("Bob", 0, Decimal('54513087982882'))
+unstaked_amount = system.unstake("Bob", 0)
 
 # Day 201
 for _ in range(5):
     system.simulate_day()
-
-print("Day 201")
 system.print_status(True)
 
 # Day 601
 for _ in range(400):
     system.simulate_day()
-
-print("Day 601")
 system.print_status(True)
 
 # Day 1200
@@ -148,5 +136,4 @@ for _ in range(599):
     system.simulate_day()
 
 system.simulate_day()
-print("Day 1200")
 system.print_status(True)

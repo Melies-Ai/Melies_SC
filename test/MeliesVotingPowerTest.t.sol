@@ -33,7 +33,7 @@ contract MeliesVotingPowerTest is Test {
         staker1 = address(0x6);
         staker2 = address(0x7);
 
-        meliesToken = new Melies(admin, TGE_TIMESTAMP);
+        meliesToken = new Melies(admin);
         meliesStaking = new MeliesStaking(
             address(meliesToken),
             uint32(TGE_TIMESTAMP)
@@ -221,8 +221,10 @@ contract MeliesVotingPowerTest is Test {
         vm.warp(block.timestamp + 400 days);
 
         // Unstake tokens
+        MeliesStaking.StakingInfo[] memory userStakes = meliesStaking
+            .getUserStakes(staker1);
         vm.startPrank(staker1);
-        meliesStaking.unstake(0, 800e8 * 10 ** 12); // Adjust for precision factor
+        meliesStaking.unstake(0, userStakes[0].ponderatedAmountWithPrecision);
         meliesToken.delegate(staker1);
         vm.stopPrank();
 
@@ -274,7 +276,7 @@ contract MeliesVotingPowerTest is Test {
             .getUserStakes(staker1);
         // Unstake from first position (no lock)
         vm.prank(staker1);
-        meliesStaking.unstake(0, userStakes[0].amountWithPrecision);
+        meliesStaking.unstake(0, userStakes[0].ponderatedAmountWithPrecision);
 
         assertEq(
             meliesToken.getVotes(staker1),
@@ -356,10 +358,6 @@ contract MeliesVotingPowerTest is Test {
             .getUserStakes(staker1);
         MeliesStaking.StakingInfo[] memory userStakes2 = meliesStaking
             .getUserStakes(staker2);
-
-        console.log("userStakes1", userStakes1[0].amountWithPrecision);
-        console.log("userStakes1", userStakes1[1].amountWithPrecision);
-        console.log("userStakes2", userStakes2[0].amountWithPrecision);
 
         vm.startPrank(staker1);
         meliesStaking.unstake(0, userStakes1[0].amountWithPrecision);

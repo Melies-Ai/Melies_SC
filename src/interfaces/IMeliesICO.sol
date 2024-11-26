@@ -31,7 +31,6 @@ interface IMeliesICO {
      * @param cliffDuration Duration of the cliff period for token vesting
      * @param vestingDuration Total duration of the vesting period
      * @param tgeReleasePercentage TGE release percentage
-     * @param lockDuration Lock duration for token vesting
      */
     struct SaleRound {
         uint256 startTime;
@@ -48,7 +47,6 @@ interface IMeliesICO {
         uint256 cliffDuration;
         uint256 vestingDuration;
         uint256 tgeReleasePercentage;
-        uint256 lockDuration;
     }
 
     /**
@@ -271,7 +269,6 @@ interface IMeliesICO {
      * @param _cliffDuration Cliff duration for token vesting
      * @param _vestingDuration Total vesting duration
      * @param _tgeReleasePercentage TGE release percentage
-     * @param _lockDuration Lock duration for token vesting
      */
     function addSaleRound(
         uint256 _startTime,
@@ -283,8 +280,7 @@ interface IMeliesICO {
         uint256 _maxPurchase,
         uint256 _cliffDuration,
         uint256 _vestingDuration,
-        uint256 _tgeReleasePercentage,
-        uint256 _lockDuration
+        uint256 _tgeReleasePercentage
     ) external;
 
     /**

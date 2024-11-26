@@ -7,14 +7,14 @@ import "../src/Melies.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/IAccessControl.sol";
 
-import {MockMelies, MockMeliesICO} from "../src/mock/MockMelies.sol";
+import {MockMeliesICO} from "../src/mock/MockMelies.sol";
 import {MockERC20} from "../src/mock/MockERC20.sol";
 import {MockUniswapV2Router02} from "../src/mock/MockUniswapV2Router02.sol";
 import {MockChainlinkAggregator} from "../src/mock/MockChainlinkAggregator.sol";
 
 contract MeliesICOSlippageTest is Test {
     MockMeliesICO public meliesICO;
-    MockMelies public meliesToken;
+    Melies public meliesToken;
     MockERC20 public usdcToken;
     MockERC20 public usdtToken;
     MockUniswapV2Router02 public uniswapRouter;
@@ -37,7 +37,7 @@ contract MeliesICOSlippageTest is Test {
 
         tgeTimestamp = block.timestamp + 30 days;
 
-        meliesToken = new MockMelies(admin, tgeTimestamp);
+        meliesToken = new Melies(admin);
 
         vm.startPrank(admin);
         meliesToken.grantRole(meliesToken.PAUSER_ROLE(), pauser);
@@ -335,8 +335,7 @@ contract MeliesICOSlippageTest is Test {
             10_000e6,
             30 days,
             180 days,
-            10,
-            7 days
+            10
         );
     }
 }

@@ -27,8 +27,8 @@ contract MeliesTest is Test {
         bytes4(keccak256("AccessControlUnauthorizedAccount(address,bytes32)"));
     bytes4 private constant ENFORCED_PAUSE_SELECTOR =
         bytes4(keccak256("EnforcedPause()"));
-    bytes4 private constant INSUFFICIENT_UNLOCKED_BALANCE_SELECTOR =
-        bytes4(keccak256("InsufficientUnlockedBalance(uint256,uint256)"));
+    bytes4 private constant INSUFFICIENT_BALANCE_SELECTOR =
+        bytes4(keccak256("ERC20InsufficientBalance(address,uint256,uint256)"));
     bytes32 private constant PERMIT_TYPEHASH =
         keccak256(
             "Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"
@@ -46,7 +46,7 @@ contract MeliesTest is Test {
 
         tgeTimestamp = block.timestamp + 21 days;
 
-        meliesToken = new Melies(admin, tgeTimestamp);
+        meliesToken = new Melies(admin);
 
         vm.startPrank(admin);
         meliesToken.grantRole(meliesToken.PAUSER_ROLE(), pauser);
@@ -246,6 +246,18 @@ contract MeliesTest is Test {
         meliesToken.burn(user, 500);
     }
 
+    /// @notice Test burning tokens
+    function test_BurnExceeding900k() public {
+        vm.prank(minter);
+        meliesToken.mint(user, 900_001e8);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(Melies.BurnAmountExceeded.selector)
+        );
+        vm.prank(burner);
+        meliesToken.burn(user, 900_001e8);
+    }
+
     /// @notice Test zero amount transfer
     function test_ZeroTransfer() public {
         vm.prank(minter);
@@ -308,7 +320,8 @@ contract MeliesTest is Test {
         vm.prank(burner);
         vm.expectRevert(
             abi.encodeWithSelector(
-                INSUFFICIENT_UNLOCKED_BALANCE_SELECTOR,
+                INSUFFICIENT_BALANCE_SELECTOR,
+                user,
                 1000,
                 1001
             )
@@ -327,7 +340,8 @@ contract MeliesTest is Test {
         vm.prank(user);
         vm.expectRevert(
             abi.encodeWithSelector(
-                INSUFFICIENT_UNLOCKED_BALANCE_SELECTOR,
+                INSUFFICIENT_BALANCE_SELECTOR,
+                user,
                 1000,
                 1001
             )
@@ -416,301 +430,6 @@ contract MeliesTest is Test {
         // Verify the results
         assertEq(meliesToken.allowance(owner, spender), value);
         assertEq(meliesToken.nonces(owner), 1);
-    }
-
-    // LOCKED TOKEN FUNCTIONALITY TESTS
-
-    /// @notice Test minting locked tokens
-    function test_MintLocked() public {
-        uint256 amount = 1000;
-        uint256 lockDuration = 30 days;
-
-        vm.prank(minter);
-        meliesToken.mintLocked(user, amount, lockDuration);
-
-        assertEq(meliesToken.balanceOf(user), amount);
-        assertEq(meliesToken.getLockedBalance(user), amount);
-    }
-
-    /// @notice Test releasing locked tokens before unlock time
-    function test_ReleaseLocked_TooEarly() public {
-        uint256 amount = 1000;
-        uint256 lockDuration = 30 days;
-
-        vm.prank(minter);
-        meliesToken.mintLocked(user, amount, lockDuration);
-
-        vm.prank(user);
-        vm.expectRevert(Melies.NoTokensToRelease.selector);
-        meliesToken.releaseLocked();
-    }
-
-    /// @notice Test releasing locked tokens after unlock time
-    function test_ReleaseLocked_AfterUnlock() public {
-        uint256 amount = 1000;
-        uint256 lockDuration = 30 days;
-
-        vm.prank(minter);
-        meliesToken.mintLocked(user, amount, lockDuration);
-
-        vm.warp(tgeTimestamp + lockDuration + 1);
-
-        vm.prank(user);
-        vm.expectEmit(true, true, false, true);
-        emit Melies.LockedTokensReleased(user, amount);
-        meliesToken.releaseLocked();
-
-        assertEq(meliesToken.getLockedBalance(user), 0);
-    }
-
-    /// @notice Test getting locked balance
-    function test_GetLockedBalance() public {
-        uint256 amount1 = 1000;
-        uint256 amount2 = 2000;
-        uint256 lockDuration1 = 30 days;
-        uint256 lockDuration2 = 60 days;
-
-        vm.startPrank(minter);
-        meliesToken.mintLocked(user, amount1, lockDuration1);
-        meliesToken.mintLocked(user, amount2, lockDuration2);
-        vm.stopPrank();
-
-        assertEq(meliesToken.getLockedBalance(user), amount1 + amount2);
-    }
-
-    /// @notice Test getting releasable amount
-    function test_GetReleasableAmount() public {
-        uint256 amount1 = 1000;
-        uint256 amount2 = 2000;
-        uint256 lockDuration1 = 30 days;
-        uint256 lockDuration2 = 60 days;
-
-        vm.startPrank(minter);
-        meliesToken.mintLocked(user, amount1, lockDuration1);
-        meliesToken.mintLocked(user, amount2, lockDuration2);
-        vm.stopPrank();
-
-        assertEq(meliesToken.getReleasableAmount(user), 0);
-
-        vm.warp(tgeTimestamp + lockDuration1 + 1);
-        assertEq(meliesToken.getReleasableAmount(user), amount1);
-
-        vm.warp(tgeTimestamp + lockDuration2 + 1);
-        assertEq(meliesToken.getReleasableAmount(user), amount1 + amount2);
-    }
-
-    /// @notice Test transferring tokens with locked balance
-    function test_TransferWithLockedBalance() public {
-        uint256 unlockedAmount = 1000;
-        uint256 lockedAmount = 2000;
-        uint256 lockDuration = 30 days;
-
-        vm.startPrank(minter);
-        meliesToken.mint(user, unlockedAmount);
-        meliesToken.mintLocked(user, lockedAmount, lockDuration);
-        vm.stopPrank();
-
-        vm.prank(user);
-        meliesToken.transfer(user2, unlockedAmount);
-
-        assertEq(meliesToken.balanceOf(user), lockedAmount);
-        assertEq(meliesToken.balanceOf(user2), unlockedAmount);
-    }
-
-    /// @notice Test transferring more than unlocked balance
-    function test_TransferExceedingUnlockedBalance() public {
-        uint256 unlockedAmount = 1000;
-        uint256 lockedAmount = 2000;
-        uint256 lockDuration = 30 days;
-
-        vm.startPrank(minter);
-        meliesToken.mint(user, unlockedAmount);
-        meliesToken.mintLocked(user, lockedAmount, lockDuration);
-        vm.stopPrank();
-
-        vm.prank(user);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                Melies.InsufficientUnlockedBalance.selector,
-                unlockedAmount,
-                unlockedAmount + 1
-            )
-        );
-        meliesToken.transfer(user2, unlockedAmount + 1);
-    }
-
-    /// @notice Test automatic release of locked tokens during transfer
-    function test_AutomaticReleaseOnTransfer() public {
-        uint256 unlockedAmount = 1000;
-        uint256 lockedAmount = 2000;
-        uint256 lockDuration = 30 days;
-
-        vm.startPrank(minter);
-        meliesToken.mint(user, unlockedAmount);
-        meliesToken.mintLocked(user, lockedAmount, lockDuration);
-        vm.stopPrank();
-
-        vm.warp(tgeTimestamp + lockDuration + 1);
-
-        vm.prank(user);
-        meliesToken.transfer(user2, unlockedAmount + lockedAmount);
-
-        assertEq(meliesToken.balanceOf(user), 0);
-        assertEq(meliesToken.balanceOf(user2), unlockedAmount + lockedAmount);
-        assertEq(meliesToken.getLockedBalance(user), 0);
-    }
-
-    /// @notice Test minting locked tokens exceeding max supply
-    function test_MintLockedExceedingMaxSupply() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                Melies.ERC20MarketCapExceeded.selector,
-                maxSupply + 1,
-                0
-            )
-        );
-        vm.prank(minter);
-        meliesToken.mintLocked(user, maxSupply + 1, 30 days);
-    }
-
-    /// @notice Test multiple locked token mints with different unlock times
-    function test_MultipleLocks() public {
-        uint256 amount1 = 1000;
-        uint256 amount2 = 2000;
-        uint256 amount3 = 3000;
-        uint256 lockDuration1 = 30 days;
-        uint256 lockDuration2 = 60 days;
-        uint256 lockDuration3 = 90 days;
-
-        vm.startPrank(minter);
-        meliesToken.mintLocked(user, amount1, lockDuration1);
-        meliesToken.mintLocked(user, amount2, lockDuration2);
-        meliesToken.mintLocked(user, amount3, lockDuration3);
-        vm.stopPrank();
-
-        assertEq(meliesToken.balanceOf(user), amount1 + amount2 + amount3);
-        assertEq(
-            meliesToken.getLockedBalance(user),
-            amount1 + amount2 + amount3
-        );
-
-        // Check releasable amounts at different times
-        assertEq(meliesToken.getReleasableAmount(user), 0);
-
-        vm.warp(tgeTimestamp + lockDuration1 + 1);
-        assertEq(meliesToken.getReleasableAmount(user), amount1);
-
-        vm.warp(tgeTimestamp + lockDuration2 + 1);
-        assertEq(meliesToken.getReleasableAmount(user), amount1 + amount2);
-
-        vm.warp(tgeTimestamp + lockDuration3 + 1);
-        assertEq(
-            meliesToken.getReleasableAmount(user),
-            amount1 + amount2 + amount3
-        );
-    }
-
-    /// @notice Test partial release of locked tokens
-    function test_PartialRelease() public {
-        uint256 amount1 = 1000;
-        uint256 amount2 = 2000;
-        uint256 lockDuration1 = 30 days;
-        uint256 lockDuration2 = 60 days;
-
-        vm.startPrank(minter);
-        meliesToken.mintLocked(user, amount1, lockDuration1);
-        meliesToken.mintLocked(user, amount2, lockDuration2);
-        vm.stopPrank();
-
-        vm.warp(tgeTimestamp + lockDuration1 + 1);
-
-        vm.prank(user);
-        vm.expectEmit(true, true, false, true);
-        emit Melies.LockedTokensReleased(user, amount1);
-        meliesToken.releaseLocked();
-
-        assertEq(meliesToken.getLockedBalance(user), amount2);
-        assertEq(meliesToken.getReleasableAmount(user), 0);
-    }
-
-    /// @notice Test transfer with partial locked balance
-    function test_TransferWithPartialLockedBalance() public {
-        uint256 unlockedAmount = 1000;
-        uint256 lockedAmount1 = 2000;
-        uint256 lockedAmount2 = 3000;
-        uint256 lockDuration1 = 30 days;
-        uint256 lockDuration2 = 60 days;
-
-        vm.startPrank(minter);
-        meliesToken.mint(user, unlockedAmount);
-        meliesToken.mintLocked(user, lockedAmount1, lockDuration1);
-        meliesToken.mintLocked(user, lockedAmount2, lockDuration2);
-        vm.stopPrank();
-
-        vm.warp(tgeTimestamp + lockDuration1 + 1);
-
-        vm.prank(user);
-        meliesToken.transfer(user2, unlockedAmount + lockedAmount1);
-
-        assertEq(meliesToken.balanceOf(user), lockedAmount2);
-        assertEq(meliesToken.balanceOf(user2), unlockedAmount + lockedAmount1);
-        assertEq(meliesToken.getLockedBalance(user), lockedAmount2);
-    }
-
-    /// @notice Test automatic release of multiple locked token batches during transfer
-    function test_AutomaticReleaseMultipleBatchesOnTransfer() public {
-        uint256 unlockedAmount = 1000;
-        uint256 lockedAmount1 = 2000;
-        uint256 lockedAmount2 = 3000;
-        uint256 lockDuration1 = 30 days;
-        uint256 lockDuration2 = 60 days;
-
-        vm.startPrank(minter);
-        meliesToken.mint(user, unlockedAmount);
-        meliesToken.mintLocked(user, lockedAmount1, lockDuration1);
-        meliesToken.mintLocked(user, lockedAmount2, lockDuration2);
-        vm.stopPrank();
-
-        vm.warp(tgeTimestamp + lockDuration2 + 1);
-
-        vm.prank(user);
-        meliesToken.transfer(
-            user2,
-            unlockedAmount + lockedAmount1 + lockedAmount2
-        );
-
-        assertEq(meliesToken.balanceOf(user), 0);
-        assertEq(
-            meliesToken.balanceOf(user2),
-            unlockedAmount + lockedAmount1 + lockedAmount2
-        );
-        assertEq(meliesToken.getLockedBalance(user), 0);
-    }
-
-    /// @notice Test minting additional locked tokens after some have been released
-    function test_MintAdditionalLockedTokens() public {
-        uint256 amount1 = 1000;
-        uint256 amount2 = 2000;
-        uint256 amount3 = 3000;
-        uint256 lockDuration1 = 30 days;
-        uint256 lockDuration2 = 60 days;
-        uint256 lockDuration3 = 90 days;
-
-        vm.startPrank(minter);
-        meliesToken.mintLocked(user, amount1, lockDuration1);
-        meliesToken.mintLocked(user, amount2, lockDuration2);
-        vm.stopPrank();
-
-        vm.warp(tgeTimestamp + lockDuration1 + 1);
-
-        vm.prank(user);
-        meliesToken.releaseLocked();
-
-        vm.prank(minter);
-        meliesToken.mintLocked(user, amount3, lockDuration3);
-
-        assertEq(meliesToken.getLockedBalance(user), amount2 + amount3);
-        assertEq(meliesToken.balanceOf(user), amount1 + amount2 + amount3);
     }
 
     // MAX SUPPLY FUNCTIONALITY TESTS

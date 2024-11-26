@@ -60,7 +60,7 @@ contract MeliesStakingTest is Test {
         tgeTimestamp = 1;
 
         // Deploy Melies token
-        meliesToken = new Melies(admin, tgeTimestamp);
+        meliesToken = new Melies(admin);
 
         // Deploy MeliesStaking contract
         stakingContract = new MeliesStaking(
@@ -126,7 +126,7 @@ contract MeliesStakingTest is Test {
         MeliesStaking.StakingInfo[] memory userStakes = stakingContract
             .getUserStakes(user1);
         vm.prank(user1);
-        stakingContract.unstake(0, userStakes[0].amountWithPrecision);
+        stakingContract.unstake(0, userStakes[0].ponderatedAmountWithPrecision);
 
         assertEq(stakingContract.getTotalPonderatedStaked(), 0);
         assertEq(stakingContract.getTotalStaked(), 0);
@@ -194,6 +194,80 @@ contract MeliesStakingTest is Test {
             stakingContract.getTotalPonderatedStaked(),
             (initialPonderatedAmount - unstakeAmount) / 10 ** PRECISION_FACTOR
         );
+    }
+
+    function test_MinimumStakeRequirement() public {
+        // Try to stake less than 150 MEL
+        vm.startPrank(user1);
+        meliesToken.approve(address(stakingContract), 149e8);
+        vm.expectRevert(MeliesStaking.StakingAmountTooLow.selector);
+        stakingContract.stake(149e8, 0, true);
+        vm.stopPrank();
+
+        // Try to stake less than 5000 MEL with index 4
+        vm.startPrank(user1);
+        meliesToken.approve(address(stakingContract), 4999e8);
+        vm.expectRevert(MeliesStaking.Minimum5000MELStakeRequired.selector);
+        stakingContract.stake(4999e8, 4, true);
+        vm.stopPrank();
+
+        // Verify successful stake with minimum amounts
+        vm.startPrank(user1);
+        // Test minimum for regular indices (0-3)
+        meliesToken.approve(address(stakingContract), 150e8);
+        stakingContract.stake(150e8, 0, true);
+
+        // Test minimum for index 4
+        meliesToken.approve(address(stakingContract), 5000e8);
+        stakingContract.stake(5000e8, 4, true);
+        vm.stopPrank();
+    }
+
+    function test_MinimumStakeRequirementAfterPartialUnstake() public {
+        // Setup initial stakes
+        vm.startPrank(user1);
+        meliesToken.approve(address(stakingContract), 300e8);
+        stakingContract.stake(300e8, 0, true); // Regular stake with 300 MEL
+
+        meliesToken.approve(address(stakingContract), 10_000e8);
+        stakingContract.stake(10_000e8, 4, true); // Genesis stake with 10000 MEL
+        vm.stopPrank();
+
+        // Fast forward to allow unstaking
+        vm.warp(block.timestamp + 366 days);
+
+        MeliesStaking.StakingInfo[] memory userStakes = stakingContract
+            .getUserStakes(user1);
+
+        // Try to partially unstake regular stake leaving less than 150 MEL
+        vm.startPrank(user1);
+        uint256 unstakeAmount = 200e8;
+        vm.expectRevert(MeliesStaking.StakingAmountTooLow.selector);
+        stakingContract.unstake(0, unstakeAmount * 10 ** PRECISION_FACTOR);
+
+        // Try to partially unstake genesis stake leaving less than 5000 MEL
+        uint256 genesisUnstakeAmount = (6000e8 * DURATION_MULTIPLIERS[4]) / 100;
+        vm.expectRevert(MeliesStaking.Minimum5000MELStakeRequired.selector);
+        stakingContract.unstake(
+            1,
+            genesisUnstakeAmount * 10 ** PRECISION_FACTOR
+        );
+        vm.stopPrank();
+
+        // Verify successful partial unstake maintaining minimum amounts
+        vm.startPrank(user1);
+        // Unstake amount that leaves exactly 150 MEL for regular stake
+        uint256 validUnstakeAmount = 150e8;
+        stakingContract.unstake(0, validUnstakeAmount * 10 ** PRECISION_FACTOR);
+
+        // Unstake amount that leaves exactly 5000 MEL for genesis stake
+        uint256 validGenesisUnstakeAmount = (5000e8 * DURATION_MULTIPLIERS[4]) /
+            100;
+        stakingContract.unstake(
+            1,
+            validGenesisUnstakeAmount * 10 ** PRECISION_FACTOR
+        );
+        vm.stopPrank();
     }
 
     function test_GenesisStakingWithin90DaysAfterTGE() public {
@@ -477,10 +551,10 @@ contract MeliesStakingTest is Test {
         // Setup multiple stakes
         for (uint256 i = 0; i < numStakers; i++) {
             address staker = address(uint160(i + 1));
-            meliesToken.mint(staker, 100e8);
+            meliesToken.mint(staker, 150e8);
             vm.startPrank(staker);
-            meliesToken.approve(address(stakingContract), 100e8);
-            stakingContract.stake(100e8, 4, true);
+            meliesToken.approve(address(stakingContract), 150e8);
+            stakingContract.stake(150e8, 3, true);
             vm.stopPrank();
         }
 
@@ -529,7 +603,7 @@ contract MeliesStakingTest is Test {
         vm.warp(1 + 366 days);
 
         vm.prank(address(uint160(1)));
-        stakingContract.unstake(0, 50e8);
+        stakingContract.unstake(0, (150e8 * DURATION_MULTIPLIERS[3]) / 100);
     }
 
     function test_EmergencyWithdraw() public {
@@ -560,8 +634,8 @@ contract MeliesStakingTest is Test {
         );
     }
 
-    // cf results of python_script/staking_scenario1.py
-    function test_MultipleStakingScenario1() public {
+    // cf results of python_script/staking_scenario.py
+    function test_MultipleStakingScenario() public {
         uint256 dayCounter = 0;
         uint256 startTime = 1 + 1 days;
         uint16 i;
@@ -579,12 +653,12 @@ contract MeliesStakingTest is Test {
         vm.prank(admin);
         stakingContract.updateAccumulatedRewards();
 
-        // Day 2: Alice stakes 100 tokens with no lock
+        // Day 2: Alice stakes 150 tokens with no lock
         vm.warp(startTime + dayCounter * 1 days);
         dayCounter++;
         vm.startPrank(user1);
-        meliesToken.approve(address(stakingContract), 100e8);
-        stakingContract.stake(100e8, 0, false); // No lock, no compound
+        meliesToken.approve(address(stakingContract), 150e8);
+        stakingContract.stake(150e8, 0, false); // No lock, no compound
         vm.stopPrank();
 
         vm.prank(admin);
@@ -636,7 +710,7 @@ contract MeliesStakingTest is Test {
             stakingContract.updateAccumulatedRewards();
         }
 
-        // Day 23: Alice unstakes her 100 tokens
+        // Day 23: Alice unstakes her 150 tokens
         vm.warp(startTime + dayCounter * 1 days);
         dayCounter++;
 
@@ -648,7 +722,7 @@ contract MeliesStakingTest is Test {
         stakingContract.unstake(0, userStakes[0].ponderatedAmountWithPrecision);
 
         uint256 finalUserBalance = meliesToken.balanceOf(user1);
-        assertEq(finalUserBalance - initialUserBalance, 29_852_930_578); //  10,000,000,000 + 19,852,930,578 = 29_852_930_578
+        assertEq(finalUserBalance - initialUserBalance, 44_754_484_857); //  150e8 + 29_754_484_857 = 44_754_484_857
 
         vm.prank(admin);
         stakingContract.updateAccumulatedRewards();
@@ -673,7 +747,7 @@ contract MeliesStakingTest is Test {
         stakingContract.unstake(1, userStakes[1].ponderatedAmountWithPrecision);
 
         finalUserBalance = meliesToken.balanceOf(user2);
-        assertEq(finalUserBalance - initialUserBalance, 804_149_589_442);
+        assertEq(finalUserBalance - initialUserBalance, 804_822_595_068);
 
         vm.prank(admin);
         stakingContract.updateAccumulatedRewards();
@@ -718,7 +792,7 @@ contract MeliesStakingTest is Test {
         stakingContract.unstake(0, userStakes[0].ponderatedAmountWithPrecision);
 
         finalUserBalance = meliesToken.balanceOf(user2);
-        assertEq(finalUserBalance - initialUserBalance, 54_513_087_982_883);
+        assertEq(finalUserBalance - initialUserBalance, 54_457_628_349_912);
 
         vm.prank(admin);
         stakingContract.updateAccumulatedRewards();
@@ -734,7 +808,7 @@ contract MeliesStakingTest is Test {
         // Test total ponderated staked at 201 days
         assertEq(
             stakingContract.getTotalPonderatedStaked(),
-            212_537_270_763_549
+            212_671_940_574_593
         );
 
         // Update rewards for days 201-600
@@ -748,7 +822,7 @@ contract MeliesStakingTest is Test {
         // Test total ponderated staked at 601 days
         assertEq(
             stakingContract.getTotalPonderatedStaked(),
-            961_830_110_494_007
+            961_964_970_236_076
         );
 
         // Update rewards for days 601-1200 - ~39 months of 90 days
@@ -762,267 +836,22 @@ contract MeliesStakingTest is Test {
         // Test total ponderated staked after 1200 days
         assertEq(
             stakingContract.getTotalPonderatedStaked(),
-            2_085_875_558_656_613
+            2_086_010_618_051_960
         );
         userStakes = stakingContract.getUserStakes(user1);
         assertEq(
             userStakes[0].amountWithPrecision / 10 ** PRECISION_FACTOR,
-            975_366_400_339
+            974_861_180_154
         );
         userStakes = stakingContract.getUserStakes(user3);
         assertEq(
             userStakes[0].amountWithPrecision / 10 ** PRECISION_FACTOR,
-            694_576_584_191_955
+            694_621_974_485_206
         );
 
         userStakes = stakingContract.getUserStakes(user1);
         vm.prank(user1);
         stakingContract.unstake(0, userStakes[0].ponderatedAmountWithPrecision);
-
-        userStakes = stakingContract.getUserStakes(user3);
-        vm.prank(user3);
-        stakingContract.unstake(0, userStakes[0].ponderatedAmountWithPrecision);
-
-        assertEq(stakingContract.getTotalPonderatedStaked(), 0);
-
-        uint256 balanceAfter = meliesToken.balanceOf(address(stakingContract));
-        uint256 diff = balanceBefore - balanceAfter;
-        assertApproxEqAbs((diff * 10) / (ANNUAL_BUDGET / 365), 1200 * 10, 1);
-    }
-
-    // cf results of python_script/staking_scenario2.py
-    function test_MultipleStakingScenario2() public {
-        uint256 dayCounter = 0;
-        uint256 startTime = 1 + 1 days;
-        uint16 i;
-
-        uint256 balanceBefore = meliesToken.balanceOf(address(stakingContract));
-
-        // Day 1: Bob stakes 1000 tokens with 180 days lock
-        vm.warp(startTime + dayCounter * 1 days);
-        dayCounter++;
-        vm.startPrank(user2);
-        meliesToken.approve(address(stakingContract), 1000e8);
-        stakingContract.stake(1000e8, 2, true); // 180 days, compound
-        vm.stopPrank();
-
-        vm.prank(admin);
-        stakingContract.updateAccumulatedRewards();
-
-        // Day 2: Alice stakes 100 tokens with no lock
-        vm.warp(startTime + dayCounter * 1 days);
-        dayCounter++;
-        vm.startPrank(user1);
-        meliesToken.approve(address(stakingContract), 100e8);
-        stakingContract.stake(100e8, 0, false); // No lock, no compound
-        vm.stopPrank();
-
-        vm.prank(admin);
-        stakingContract.updateAccumulatedRewards();
-
-        // Update rewards for days 3-4
-        for (i = 3; i <= 4; i++) {
-            vm.warp(startTime + dayCounter * 1 days);
-            dayCounter++;
-            vm.prank(admin);
-            stakingContract.updateAccumulatedRewards();
-        }
-
-        // Day 5: Bob stakes another 1000 tokens with 90 days lock
-        vm.warp(startTime + dayCounter * 1 days);
-        dayCounter++;
-        vm.startPrank(user2);
-        meliesToken.approve(address(stakingContract), 1000e8);
-        stakingContract.stake(1000e8, 1, true); // 90 days, compound
-        vm.stopPrank();
-
-        vm.prank(admin);
-        stakingContract.updateAccumulatedRewards();
-
-        // Update rewards for days 6-9
-        for (i = 6; i <= 9; i++) {
-            vm.warp(startTime + dayCounter * 1 days);
-            dayCounter++;
-            vm.prank(admin);
-            stakingContract.updateAccumulatedRewards();
-        }
-
-        // Day 10: Charlie stakes 10000 tokens with 365 days lock
-        vm.warp(startTime + dayCounter * 1 days);
-        dayCounter++;
-        vm.startPrank(user3);
-        meliesToken.approve(address(stakingContract), 10_000e8);
-        stakingContract.stake(10_000e8, 4, true); // 365 days, compound
-        vm.stopPrank();
-
-        vm.prank(admin);
-        stakingContract.updateAccumulatedRewards();
-
-        // Update rewards for days 11-22
-        for (i = 11; i <= 22; i++) {
-            vm.warp(startTime + dayCounter * 1 days);
-            dayCounter++;
-            vm.prank(admin);
-            stakingContract.updateAccumulatedRewards();
-        }
-
-        // Day 23: Alice unstakes her 100 tokens
-        vm.warp(startTime + dayCounter * 1 days);
-        dayCounter++;
-
-        MeliesStaking.StakingInfo[] memory userStakes = stakingContract
-            .getUserStakes(user1);
-        uint256 initialUserBalance = meliesToken.balanceOf(user1);
-
-        vm.prank(user1);
-        stakingContract.unstake(0, userStakes[0].ponderatedAmountWithPrecision);
-
-        uint256 finalUserBalance = meliesToken.balanceOf(user1);
-        assertEq(finalUserBalance - initialUserBalance, 29_852_930_578); //  10,000,000,000 + 19,852,930,578 = 29_852_930_578
-
-        vm.prank(admin);
-        stakingContract.updateAccumulatedRewards();
-
-        // Update rewards for days 24-95
-        for (i = 24; i <= 95; i++) {
-            vm.warp(startTime + dayCounter * 1 days);
-            dayCounter++;
-            vm.prank(admin);
-            stakingContract.updateAccumulatedRewards();
-        }
-
-        // Day 96: Bob unstakes 2nd stake
-        vm.warp(startTime + dayCounter * 1 days);
-        dayCounter++;
-
-        initialUserBalance = meliesToken.balanceOf(user2);
-        uint256 unstakeAmount = 804_149_589_441 *
-            DURATION_MULTIPLIERS[1] *
-            10 ** (PRECISION_FACTOR - DURATION_MULTIPLIER_PRECISION);
-
-        vm.prank(user2);
-        stakingContract.unstake(1, unstakeAmount);
-
-        finalUserBalance = meliesToken.balanceOf(user2);
-        assertEq(finalUserBalance - initialUserBalance, 804_149_589_441);
-
-        vm.prank(admin);
-        stakingContract.updateAccumulatedRewards();
-
-        // Update rewards for days 97-107
-        for (i = 97; i <= 107; i++) {
-            vm.warp(startTime + dayCounter * 1 days);
-            dayCounter++;
-            vm.prank(admin);
-            stakingContract.updateAccumulatedRewards();
-        }
-
-        // Day 108: Alice stakes 10_000 tokens with 365 days lock
-        vm.warp(startTime + dayCounter * 1 days);
-        dayCounter++;
-
-        vm.startPrank(user1);
-        meliesToken.approve(address(stakingContract), 1_000e8);
-        stakingContract.stake(1_000e8, 3, true); // 365 days, compound
-        vm.stopPrank();
-
-        vm.prank(admin);
-        stakingContract.updateAccumulatedRewards();
-
-        // Update rewards for days 109-195
-        for (i = 109; i <= 195; i++) {
-            vm.warp(startTime + dayCounter * 1 days);
-            dayCounter++;
-            vm.prank(admin);
-            stakingContract.updateAccumulatedRewards();
-        }
-
-        // Day 196: Bob unstakes 1st stake
-        vm.warp(startTime + dayCounter * 1 days);
-        dayCounter++;
-
-        initialUserBalance = meliesToken.balanceOf(user2);
-        unstakeAmount =
-            54_513_087_982_882 *
-            DURATION_MULTIPLIERS[2] *
-            10 ** (PRECISION_FACTOR - DURATION_MULTIPLIER_PRECISION);
-
-        vm.prank(user2);
-        stakingContract.unstake(0, unstakeAmount);
-
-        finalUserBalance = meliesToken.balanceOf(user2);
-        assertEq(finalUserBalance - initialUserBalance, 54_513_087_982_882);
-
-        vm.prank(admin);
-        stakingContract.updateAccumulatedRewards();
-
-        // Update rewards for days 197-200
-        for (i = 197; i <= 200; i++) {
-            vm.warp(startTime + dayCounter * 1 days);
-            dayCounter++;
-            vm.prank(admin);
-            stakingContract.updateAccumulatedRewards();
-        }
-
-        // Test total ponderated staked at 201 days
-        assertEq(
-            stakingContract.getTotalPonderatedStaked(),
-            212_537_270_763_553
-        );
-
-        // Update rewards for days 201-600
-        for (i = 201; i <= 600; i++) {
-            vm.warp(startTime + dayCounter * 1 days);
-            dayCounter++;
-            vm.prank(admin);
-            stakingContract.updateAccumulatedRewards();
-        }
-
-        // Test total ponderated staked at 601 days
-        assertEq(
-            stakingContract.getTotalPonderatedStaked(),
-            961_830_110_494_004
-        );
-
-        // Update rewards for days 601-1200 - ~39 months of 90 days
-        for (i = 601; i <= 1200; i++) {
-            vm.warp(startTime + dayCounter * 1 days);
-            dayCounter++;
-            vm.prank(admin);
-            stakingContract.updateAccumulatedRewards();
-        }
-
-        // Test total ponderated staked after 1200 days
-        assertEq(
-            stakingContract.getTotalPonderatedStaked(),
-            2_085_875_558_656_603
-        );
-
-        userStakes = stakingContract.getUserStakes(user1);
-        assertEq(
-            userStakes[0].amountWithPrecision / 10 ** PRECISION_FACTOR,
-            975_366_400_339
-        );
-
-        userStakes = stakingContract.getUserStakes(user2);
-        assertEq(userStakes[0].amountWithPrecision / 10 ** PRECISION_FACTOR, 5);
-        assertEq(userStakes[1].amountWithPrecision / 10 ** PRECISION_FACTOR, 7);
-
-        userStakes = stakingContract.getUserStakes(user3);
-        assertEq(
-            userStakes[0].amountWithPrecision / 10 ** PRECISION_FACTOR,
-            694_576_584_191_946
-        );
-
-        userStakes = stakingContract.getUserStakes(user1);
-        vm.prank(user1);
-        stakingContract.unstake(0, userStakes[0].ponderatedAmountWithPrecision);
-
-        userStakes = stakingContract.getUserStakes(user2);
-        vm.startPrank(user2);
-        stakingContract.unstake(0, userStakes[0].ponderatedAmountWithPrecision);
-        stakingContract.unstake(0, userStakes[1].ponderatedAmountWithPrecision);
-        vm.stopPrank();
 
         userStakes = stakingContract.getUserStakes(user3);
         vm.prank(user3);
@@ -1040,15 +869,15 @@ contract MeliesStakingTest is Test {
         uint256 dayCounter = 0;
         uint256 startTime = 1 + 1 days;
         uint256 i;
-        uint256 numStakers = 500_000; // 50_000_000 (estimated max supply for staking) / 100 (min staking) = 500_000 stakers
+        uint256 numStakers = 333_333; // 50_000_000 (estimated max supply for staking) / 150 (min staking) = 333_333 stakers
 
         // Stake for each simulated user
         for (i = 0; i < numStakers; i++) {
             address staker = address(uint160(i + 1));
-            meliesToken.mint(staker, 100e8);
+            meliesToken.mint(staker, 150e8);
             vm.startPrank(staker);
-            meliesToken.approve(address(stakingContract), 100e8);
-            stakingContract.stake(100e8, 4, true);
+            meliesToken.approve(address(stakingContract), 150e8);
+            stakingContract.stake(150e8, 3, true);
             vm.stopPrank();
         }
 
@@ -1075,7 +904,7 @@ contract MeliesStakingTest is Test {
         // Check results
         assertEq(
             stakingContract.getTotalPonderatedStaked(),
-            500_000 * 100e8 * 3 + ((ANNUAL_BUDGET / 365) * 3) // 500_000 * 1e8 * 3 + Daily budget * 3
+            (333_333 * 150e8 * 2.2) + (((ANNUAL_BUDGET / 365) * 220) / 100) // 333_333 * 150e8 * 2.2 + Daily budget * 2.2
         );
     }
 

@@ -29,7 +29,7 @@ contract MeliesScript is Script {
         address defaultAdmin = vm.addr(deployerPrivateKey);
         uint256 initialTgeTimestamp = block.timestamp + 30 days; // Example: TGE in 30 days
 
-        meliesToken = new Melies(defaultAdmin, initialTgeTimestamp);
+        meliesToken = new Melies(defaultAdmin);
 
         console.log("Melies token deployed at:", address(meliesToken));
 

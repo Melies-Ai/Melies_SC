@@ -8,14 +8,14 @@ import "../src/Melies.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/IAccessControl.sol";
 
-import {MockMelies, MockMeliesICO} from "../src/mock/MockMelies.sol";
+import {MockMeliesICO} from "../src/mock/MockMelies.sol";
 import {MockERC20} from "../src/mock/MockERC20.sol";
 import {MockUniswapV2Router02} from "../src/mock/MockUniswapV2Router02.sol";
 import {MockChainlinkAggregator} from "../src/mock/MockChainlinkAggregator.sol";
 
 contract MeliesICORefundTest is Test {
     MockMeliesICO public meliesICO;
-    MockMelies public meliesToken;
+    Melies public meliesToken;
     uint256 public tgeTimestamp;
     MockERC20 public usdcToken;
     MockERC20 public usdtToken;
@@ -44,7 +44,7 @@ contract MeliesICORefundTest is Test {
         user2 = address(0x5);
 
         tgeTimestamp = block.timestamp + 21 days;
-        meliesToken = new MockMelies(admin, tgeTimestamp);
+        meliesToken = new Melies(admin);
 
         vm.startPrank(admin);
         meliesToken.grantRole(meliesToken.PAUSER_ROLE(), pauser);
@@ -121,8 +121,7 @@ contract MeliesICORefundTest is Test {
             10_000e6,
             30 days,
             180 days,
-            10,
-            7 days
+            10
         );
 
         // User buys tokens
@@ -204,8 +203,7 @@ contract MeliesICORefundTest is Test {
             10_000e6,
             30 days,
             180 days,
-            10,
-            7 days
+            10
         );
 
         // User buys tokens
@@ -250,8 +248,7 @@ contract MeliesICORefundTest is Test {
             100_000e6,
             30 days,
             180 days,
-            10,
-            7 days
+            10
         );
 
         // User buys tokens to reach soft cap
@@ -349,8 +346,7 @@ contract MeliesICORefundTest is Test {
             100_000e6,
             30 days,
             180 days,
-            10,
-            7 days
+            10
         );
 
         meliesICO.addSaleRound(
@@ -363,8 +359,7 @@ contract MeliesICORefundTest is Test {
             150_000e6,
             60 days,
             360 days,
-            5,
-            14 days
+            5
         );
 
         // Users buy tokens in different rounds
@@ -455,8 +450,7 @@ contract MeliesICORefundTest is Test {
             10_000e6,
             30 days,
             180 days,
-            10,
-            7
+            10
         );
     }
 
@@ -477,8 +471,7 @@ contract MeliesICORefundTest is Test {
             10_000e6,
             30 days,
             180 days,
-            10,
-            7
+            10
         );
 
         meliesICO.addSaleRound(
@@ -491,7 +484,6 @@ contract MeliesICORefundTest is Test {
             20_000e6,
             90 days,
             240 days,
-            0,
             0
         );
         vm.stopPrank();
@@ -578,6 +570,5 @@ contract MeliesICORefundTest is Test {
 
     function setupTgeTimestamp(uint newTgeTimestamp) internal {
         meliesICO.setTgeTimestamp(newTgeTimestamp);
-        meliesToken.setTgeTimestamp(newTgeTimestamp);
     }
 }

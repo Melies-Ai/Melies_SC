@@ -97,7 +97,6 @@ contract MeliesICO is IMeliesICO, ReentrancyGuard, AccessControl {
      * @param _cliffDuration Cliff duration for token vesting
      * @param _vestingDuration Total vesting duration
      * @param _tgeReleasePercentage TGE release percentage
-     * @param _lockDuration Lock duration for token vesting
      */
     function addSaleRound(
         uint256 _startTime,
@@ -109,8 +108,7 @@ contract MeliesICO is IMeliesICO, ReentrancyGuard, AccessControl {
         uint256 _maxPurchase,
         uint256 _cliffDuration,
         uint256 _vestingDuration,
-        uint256 _tgeReleasePercentage,
-        uint256 _lockDuration
+        uint256 _tgeReleasePercentage
     ) external onlyRole(ADMIN_ROLE) {
         if (_startTime >= _endTime) revert InvalidTimeRange();
         if (_tokenPrice == 0) revert InvalidTokenPrice();
@@ -139,8 +137,7 @@ contract MeliesICO is IMeliesICO, ReentrancyGuard, AccessControl {
                 isFinish: false,
                 cliffDuration: _cliffDuration,
                 vestingDuration: _vestingDuration,
-                tgeReleasePercentage: _tgeReleasePercentage,
-                lockDuration: _lockDuration
+                tgeReleasePercentage: _tgeReleasePercentage
             })
         );
     }
@@ -549,7 +546,6 @@ contract MeliesICO is IMeliesICO, ReentrancyGuard, AccessControl {
         // for each sales round
         for (uint256 i = 0; i < saleRounds.length; i++) {
             Allocation storage allocation = allocations[msg.sender][i];
-            SaleRound storage round = saleRounds[i];
             if (allocation.totalTokenAmount > 0) {
                 (
                     uint256 claimableAmount,
@@ -561,26 +557,9 @@ contract MeliesICO is IMeliesICO, ReentrancyGuard, AccessControl {
                     allocation.lastClaimTimestamp = newLastClaimTimestamp;
                     totalClaimableAmount += claimableAmount;
 
-                    // Calculate remaining lock time for TGE release amount
-                    uint256 currentTime = block.timestamp;
-                    // currentTime is always greater than tgeTimestamp (else claimableAmount would be 0)
-                    uint256 elapsedTime = currentTime - tgeTimestamp;
-                    uint256 remainingLockTime = elapsedTime >=
-                        round.lockDuration
-                        ? 0
-                        : round.lockDuration - elapsedTime;
-
                     // Mint TGE release amount with remaining lock time
                     if (tgeReleaseAmount > 0) {
-                        if (remainingLockTime > 0) {
-                            meliesToken.mintLocked(
-                                msg.sender,
-                                tgeReleaseAmount,
-                                remainingLockTime
-                            );
-                        } else {
-                            totalUnlockedAmount += tgeReleaseAmount;
-                        }
+                        totalUnlockedAmount += tgeReleaseAmount;
                     }
 
                     // Add vesting amount to unlocked amount
@@ -617,7 +596,7 @@ contract MeliesICO is IMeliesICO, ReentrancyGuard, AccessControl {
             round.cliffDuration = _newCliffDuration;
             isChangeApplied = true;
         }
-        
+
         // can't adjust vesting duration after the current vesting end time
         if (
             block.timestamp <

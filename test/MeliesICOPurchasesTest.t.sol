@@ -8,14 +8,14 @@ import "../src/Melies.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/IAccessControl.sol";
 
-import {MockMelies, MockMeliesICO} from "../src/mock/MockMelies.sol";
+import {MockMeliesICO} from "../src/mock/MockMelies.sol";
 import {MockERC20} from "../src/mock/MockERC20.sol";
 import {MockUniswapV2Router02} from "../src/mock/MockUniswapV2Router02.sol";
 import {MockChainlinkAggregator} from "../src/mock/MockChainlinkAggregator.sol";
 
 contract MeliesICOPurchasesTest is Test {
     MockMeliesICO public meliesICO;
-    MockMelies public meliesToken;
+    Melies public meliesToken;
     uint256 public tgeTimestamp;
     MockERC20 public usdcToken;
     MockERC20 public usdtToken;
@@ -44,7 +44,7 @@ contract MeliesICOPurchasesTest is Test {
         user2 = address(0x5);
 
         tgeTimestamp = block.timestamp + 21 days;
-        meliesToken = new MockMelies(admin, tgeTimestamp);
+        meliesToken = new Melies(admin);
 
         vm.startPrank(admin);
         meliesToken.grantRole(meliesToken.PAUSER_ROLE(), pauser);
@@ -169,7 +169,6 @@ contract MeliesICOPurchasesTest is Test {
         uint256 cliffDuration = 30 days;
         uint256 vestingDuration = 180 days;
         uint256 tgeReleasePercentage = 10;
-        uint256 lockDuration = 3 days;
 
         meliesICO.addSaleRound(
             startTime,
@@ -181,8 +180,7 @@ contract MeliesICOPurchasesTest is Test {
             maxPurchase,
             cliffDuration,
             vestingDuration,
-            tgeReleasePercentage,
-            lockDuration
+            tgeReleasePercentage
         );
 
         // User buys tokens with 500 ETH (1,000,000 USDC, exceeding round cap)
@@ -319,8 +317,7 @@ contract MeliesICOPurchasesTest is Test {
             10_000e6,
             30 days,
             180 days,
-            10,
-            3 days
+            10
         );
 
         // User buys tokens with 1 ETH
@@ -359,8 +356,7 @@ contract MeliesICOPurchasesTest is Test {
             10_000e6,
             30 days,
             180 days,
-            10,
-            3 days
+            10
         );
 
         // User buys tokens with 1 ETH (2000 USDC, which exceeds the soft cap)
@@ -497,7 +493,6 @@ contract MeliesICOPurchasesTest is Test {
         uint256 cliffDuration = 30 days;
         uint256 vestingDuration = 180 days;
         uint256 tgeReleasePercentage = 10;
-        uint256 lockDuration = 3 days;
 
         meliesICO.addSaleRound(
             startTime,
@@ -509,8 +504,7 @@ contract MeliesICOPurchasesTest is Test {
             maxPurchase,
             cliffDuration,
             vestingDuration,
-            tgeReleasePercentage,
-            lockDuration
+            tgeReleasePercentage
         );
 
         // Mint USDC to user1
@@ -652,8 +646,7 @@ contract MeliesICOPurchasesTest is Test {
             10_000e6,
             30 days,
             180 days,
-            10,
-            3 days
+            10
         );
 
         // Mint USDC to user1
@@ -795,7 +788,6 @@ contract MeliesICOPurchasesTest is Test {
         uint256 cliffDuration = 30 days;
         uint256 vestingDuration = 180 days;
         uint256 tgeReleasePercentage = 10;
-        uint256 lockDuration = 3 days;
 
         meliesICO.addSaleRound(
             startTime,
@@ -807,8 +799,7 @@ contract MeliesICOPurchasesTest is Test {
             maxPurchase,
             cliffDuration,
             vestingDuration,
-            tgeReleasePercentage,
-            lockDuration
+            tgeReleasePercentage
         );
 
         // Mint USDT to user1
@@ -950,8 +941,7 @@ contract MeliesICOPurchasesTest is Test {
             10_000e6,
             30 days,
             180 days,
-            10,
-            3 days
+            10
         );
 
         // Mint USDT to user1
@@ -1092,7 +1082,6 @@ contract MeliesICOPurchasesTest is Test {
         uint256 cliffDuration = 30 days;
         uint256 vestingDuration = 180 days;
         uint256 tgeReleasePercentage = 10;
-        uint256 lockDuration = 3 days;
 
         meliesICO.addSaleRound(
             startTime,
@@ -1104,8 +1093,7 @@ contract MeliesICOPurchasesTest is Test {
             maxPurchase,
             cliffDuration,
             vestingDuration,
-            tgeReleasePercentage,
-            lockDuration
+            tgeReleasePercentage
         );
 
         // Fill up most of the cap
@@ -1130,7 +1118,6 @@ contract MeliesICOPurchasesTest is Test {
         uint256 cliffDuration = 30 days;
         uint256 vestingDuration = 180 days;
         uint256 tgeReleasePercentage = 10;
-        uint256 lockDuration = 3 days;
 
         meliesICO.addSaleRound(
             startTime,
@@ -1142,8 +1129,7 @@ contract MeliesICOPurchasesTest is Test {
             maxPurchase,
             cliffDuration,
             vestingDuration,
-            tgeReleasePercentage,
-            lockDuration
+            tgeReleasePercentage
         );
 
         // Fill up most of the cap
@@ -1200,8 +1186,7 @@ contract MeliesICOPurchasesTest is Test {
             10_000e6,
             30 days,
             180 days,
-            10,
-            7
+            10
         );
     }
 
@@ -1222,8 +1207,7 @@ contract MeliesICOPurchasesTest is Test {
             10_000e6,
             30 days,
             180 days,
-            10,
-            7
+            10
         );
 
         meliesICO.addSaleRound(
@@ -1236,7 +1220,6 @@ contract MeliesICOPurchasesTest is Test {
             20_000e6,
             90 days,
             240 days,
-            0,
             0
         );
         vm.stopPrank();
@@ -1323,6 +1306,5 @@ contract MeliesICOPurchasesTest is Test {
 
     function setupTgeTimestamp(uint newTgeTimestamp) internal {
         meliesICO.setTgeTimestamp(newTgeTimestamp);
-        meliesToken.setTgeTimestamp(newTgeTimestamp);
     }
 }

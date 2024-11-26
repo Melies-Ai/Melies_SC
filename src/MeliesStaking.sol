@@ -36,7 +36,8 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
     }
 
     error RewardsBeingUpdated();
-    error AmountMustBeGreaterThanZero();
+    error StakingAmountTooLow();
+    error Minimum5000MELStakeRequired();
     error InvalidDurationIndex();
     error CannotStakeAfter90DaysFromTGE();
     error InvalidStakeIndex();
@@ -46,7 +47,6 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
     error NoRewardsToClaim();
     error CanOnlyUpdateOncePerDay();
     error CanOnlyToggleForNoLockStaking();
-    error StakingAmountTooLow();
     error InvalidMultiplier();
     error DailyBudgetMustBeGreaterThanZero();
 
@@ -58,7 +58,7 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
     uint256 private constant DURATION_MULTIPLIER_PRECISION = 2;
     uint256 private constant PRECISION_FACTOR = 12;
     uint256 private constant GAS_LIMIT_EXECUTION = 100_000;
-    uint256 public MIN_STAKE_AMOUNT = 100e8;
+    uint256 public MIN_STAKE_AMOUNT = 150e8;
     bytes32 private constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     uint16[5] public DURATION_MULTIPLIERS = [1e2, 1.3e2, 1.6e2, 2.2e2, 3e2];
 
@@ -95,9 +95,13 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
 
     /**
      * @dev Allows users to stake their tokens
-     * @param _amount Amount of tokens to stake
+     * @param _amount Amount of tokens to stake (minimum 150 MEL, 5000 MEL for index 4)
      * @param _durationIndex Index representing the staking duration
      * @param _compoundRewards Whether to compound rewards or not
+     * Requirements:
+     * - Amount must be at least 150 MEL tokens for all stakes
+     * - Amount must be at least 5000 MEL tokens for index 4 stakes
+     * - Cannot stake with index 4 after 90 days from TGE
      */
     function stake(
         uint256 _amount,
@@ -105,8 +109,9 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
         bool _compoundRewards
     ) external whenNotPaused nonReentrant {
         if (isRewardUpdating) revert RewardsBeingUpdated();
-        if (_amount == 0) revert AmountMustBeGreaterThanZero();
         if (_amount < MIN_STAKE_AMOUNT) revert StakingAmountTooLow();
+        if (_durationIndex == 4 && _amount < 5000e8)
+            revert Minimum5000MELStakeRequired();
         if (_durationIndex >= DURATION_MULTIPLIERS.length)
             revert InvalidDurationIndex();
         if (_durationIndex == 4 && block.timestamp > tgeTimestamp + 90 days) {
@@ -159,6 +164,10 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
      * @dev Allows users to unstake their tokens and claim rewards
      * @param _stakeIndex Index of the stake to unstake
      * @param _ponderatedAmountWithPrecision Amount to unstake with precision
+     * Requirements:
+     * - Remaining amount must be at least 150 MEL tokens for all stakes
+     * - Remaining amount must be at least 5000 MEL tokens for index 4 stakes
+     * - Staking period must have ended
      */
     function unstake(
         uint256 _stakeIndex,
@@ -199,22 +208,49 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
                 revert AmountGreaterThanPonderatedStakeAmount();
             }
         } else {
-            totalStakedWithPrecision -= amountWithPrecision;
-            totalPonderatedStakedWithPrecision -= _ponderatedAmountWithPrecision;
-            userStake.amountWithPrecision -= amountWithPrecision;
-            userStake
-                .ponderatedAmountWithPrecision -= _ponderatedAmountWithPrecision;
+            if (
+                (userStake.amountWithPrecision - amountWithPrecision) <
+                (10 ** PRECISION_FACTOR)
+            ) {
+                totalStakedWithPrecision -= userStake.amountWithPrecision;
+                totalPonderatedStakedWithPrecision -= userStake
+                    .ponderatedAmountWithPrecision;
+                userStake.amountWithPrecision = 0;
+                userStake.ponderatedAmountWithPrecision = 0;
+            } else {
+                totalStakedWithPrecision -= amountWithPrecision;
+                totalPonderatedStakedWithPrecision -= _ponderatedAmountWithPrecision;
+                userStake.amountWithPrecision -= amountWithPrecision;
+                userStake
+                    .ponderatedAmountWithPrecision -= _ponderatedAmountWithPrecision;
+            }
         }
         userStake.accumulatedRewardsWithPrecision = 0;
 
         meliesToken.safeTransfer(msg.sender, unstakeAmount);
 
-        if (userStake.amountWithPrecision == 0) {
+        if (
+            userStake.amountWithPrecision == 0 ||
+            userStake.ponderatedAmountWithPrecision == 0
+        ) {
+            userStake.amountWithPrecision = 0;
+            userStake.ponderatedAmountWithPrecision = 0;
+
             // Remove the stake by swapping with the last element and popping
             userStakes[msg.sender][_stakeIndex] = userStakes[msg.sender][
                 userStakes[msg.sender].length - 1
             ];
             userStakes[msg.sender].pop();
+        } else {
+            if (
+                userStake.amountWithPrecision <
+                MIN_STAKE_AMOUNT * 10 ** PRECISION_FACTOR
+            ) revert StakingAmountTooLow();
+
+            if (
+                userStake.durationIndex == 4 &&
+                userStake.amountWithPrecision < 5000e8 * 10 ** PRECISION_FACTOR
+            ) revert Minimum5000MELStakeRequired();
         }
 
         // Update voting power

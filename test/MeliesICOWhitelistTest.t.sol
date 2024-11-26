@@ -5,14 +5,14 @@ import "forge-std/Test.sol";
 import "../src/MeliesICO.sol";
 import "../src/Melies.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {MockMelies, MockMeliesICO} from "../src/mock/MockMelies.sol";
+import {MockMeliesICO} from "../src/mock/MockMelies.sol";
 import {MockERC20} from "../src/mock/MockERC20.sol";
 import {MockUniswapV2Router02} from "../src/mock/MockUniswapV2Router02.sol";
 import {MockChainlinkAggregator} from "../src/mock/MockChainlinkAggregator.sol";
 
 contract MeliesICOWhitelistTest is Test {
     MockMeliesICO public meliesICO;
-    MockMelies public meliesToken;
+    Melies public meliesToken;
     MockERC20 public usdcToken;
     MockERC20 public usdtToken;
     MockUniswapV2Router02 public uniswapRouter;
@@ -30,7 +30,7 @@ contract MeliesICOWhitelistTest is Test {
         vm.startPrank(admin);
 
         // Deploy necessary contracts
-        meliesToken = new MockMelies(admin, block.timestamp + 1 days);
+        meliesToken = new Melies(admin);
 
         meliesToken.grantRole(meliesToken.PAUSER_ROLE(), admin);
         meliesToken.grantRole(meliesToken.MINTER_ROLE(), admin);
@@ -301,8 +301,7 @@ contract MeliesICOWhitelistTest is Test {
             10_000e6,
             30 days,
             180 days,
-            10,
-            7 days
+            10
         );
         vm.stopPrank();
     }
@@ -319,8 +318,7 @@ contract MeliesICOWhitelistTest is Test {
             10_000e6,
             30 days,
             180 days,
-            10,
-            7 days
+            10
         );
         meliesICO.addSaleRound(
             block.timestamp + 7 days,
@@ -332,8 +330,7 @@ contract MeliesICOWhitelistTest is Test {
             20_000e6,
             60 days,
             360 days,
-            5,
-            14 days
+            5
         );
         vm.stopPrank();
     }

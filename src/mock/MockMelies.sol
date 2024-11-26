@@ -12,17 +12,6 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-contract MockMelies is Melies {
-    constructor(
-        address defaultAdmin,
-        uint256 initialTgeTimestamp
-    ) Melies(defaultAdmin, initialTgeTimestamp) {}
-
-    function setTgeTimestamp(uint256 newTgeTimestamp) public {
-        tgeTimestamp = newTgeTimestamp;
-    }
-}
-
 contract MockMeliesICO is MeliesICO {
     constructor(
         address _meliesToken,

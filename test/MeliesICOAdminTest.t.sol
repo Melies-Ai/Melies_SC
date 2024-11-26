@@ -8,14 +8,14 @@ import "../src/Melies.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/IAccessControl.sol";
 
-import {MockMelies, MockMeliesICO} from "../src/mock/MockMelies.sol";
+import {MockMeliesICO} from "../src/mock/MockMelies.sol";
 import {MockERC20} from "../src/mock/MockERC20.sol";
 import {MockUniswapV2Router02} from "../src/mock/MockUniswapV2Router02.sol";
 import {MockChainlinkAggregator} from "../src/mock/MockChainlinkAggregator.sol";
 
 contract MeliesICOAdminTest is Test {
     MockMeliesICO public meliesICO;
-    MockMelies public meliesToken;
+    Melies public meliesToken;
     uint256 public tgeTimestamp;
     MockERC20 public usdcToken;
     MockERC20 public usdtToken;
@@ -41,7 +41,7 @@ contract MeliesICOAdminTest is Test {
         user2 = address(0x5);
 
         tgeTimestamp = block.timestamp + 21 days;
-        meliesToken = new MockMelies(admin, tgeTimestamp);
+        meliesToken = new Melies(admin);
 
         vm.startPrank(admin);
         meliesToken.grantRole(meliesToken.PAUSER_ROLE(), pauser);
@@ -90,8 +90,7 @@ contract MeliesICOAdminTest is Test {
             10_000e6,
             30 days,
             180 days,
-            10,
-            7 days
+            10
         );
 
         vm.expectRevert(IMeliesICO.InvalidTokenPrice.selector);
@@ -106,8 +105,7 @@ contract MeliesICOAdminTest is Test {
             10_000e6,
             30 days,
             180 days,
-            10,
-            7 days
+            10
         );
 
         vm.expectRevert(IMeliesICO.InvalidCap.selector);
@@ -122,8 +120,7 @@ contract MeliesICOAdminTest is Test {
             10_000e6,
             30 days,
             180 days,
-            10,
-            7 days
+            10
         );
     }
 
@@ -152,8 +149,7 @@ contract MeliesICOAdminTest is Test {
             100_000e6,
             30 days,
             180 days,
-            10,
-            7 days
+            10
         );
         meliesICO.addSaleRound(
             block.timestamp + 7 days,
@@ -165,8 +161,7 @@ contract MeliesICOAdminTest is Test {
             200_000e6,
             60 days,
             360 days,
-            5,
-            14 days
+            5
         );
 
         address[] memory addresses = new address[](1);
@@ -194,8 +189,7 @@ contract MeliesICOAdminTest is Test {
             100_000e6,
             30 days,
             180 days,
-            10,
-            7 days
+            10
         );
         meliesICO.addSaleRound(
             block.timestamp + 7 days,
@@ -207,8 +201,7 @@ contract MeliesICOAdminTest is Test {
             200_000e6,
             60 days,
             360 days,
-            5,
-            14 days
+            5
         );
 
         address[] memory addresses = new address[](1);
@@ -245,8 +238,7 @@ contract MeliesICOAdminTest is Test {
             10_000e6,
             30 days,
             180 days,
-            10,
-            7 days
+            10
         );
 
         vm.expectRevert(
@@ -267,8 +259,7 @@ contract MeliesICOAdminTest is Test {
             10_000e6,
             30 days,
             180 days,
-            10,
-            7 days
+            10
         );
     }
 
@@ -530,8 +521,7 @@ contract MeliesICOAdminTest is Test {
             10_000e6,
             30 days,
             180 days,
-            10,
-            7 days
+            10
         );
     }
 
@@ -547,8 +537,7 @@ contract MeliesICOAdminTest is Test {
             10_000e6,
             30 days,
             180 days,
-            10,
-            7 days
+            10
         );
         meliesICO.addSaleRound(
             block.timestamp + 7 days,
@@ -560,8 +549,7 @@ contract MeliesICOAdminTest is Test {
             20_000e6,
             60 days,
             360 days,
-            5,
-            14 days
+            5
         );
         vm.stopPrank();
     }
