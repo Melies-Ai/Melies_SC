@@ -405,20 +405,11 @@ interface IMeliesICO {
      * @param _beneficiary Address of the beneficiary
      * @param _roundId ID of the sale round
      * @return claimableAmount Claimable token amount
-     * @return tgeReleaseAmount TGE release amount
-     * @return newLastClaimTimestamp New last claim timestamp
      */
     function getClaimableAmount(
         address _beneficiary,
         uint256 _roundId
-    )
-        external
-        view
-        returns (
-            uint256 claimableAmount,
-            uint256 tgeReleaseAmount,
-            uint256 newLastClaimTimestamp
-        );
+    ) external view returns (uint256 claimableAmount);
 
     /**
      * @dev Retrieves the current active sale round

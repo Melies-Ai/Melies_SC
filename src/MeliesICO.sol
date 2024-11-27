@@ -541,38 +541,23 @@ contract MeliesICO is IMeliesICO, ReentrancyGuard, AccessControl {
         if (!claimEnabled) revert ClaimingNotEnabled();
 
         uint256 totalClaimableAmount = 0;
-        uint256 totalUnlockedAmount = 0;
 
         // for each sales round
         for (uint256 i = 0; i < saleRounds.length; i++) {
             Allocation storage allocation = allocations[msg.sender][i];
             if (allocation.totalTokenAmount > 0) {
-                (
-                    uint256 claimableAmount,
-                    uint256 tgeReleaseAmount,
-                    uint256 newLastClaimTimestamp
-                ) = getClaimableAmount(msg.sender, i);
+                uint256 claimableAmount = getClaimableAmount(msg.sender, i);
                 if (claimableAmount > 0) {
                     allocation.claimedAmount += claimableAmount;
-                    allocation.lastClaimTimestamp = newLastClaimTimestamp;
+                    allocation.lastClaimTimestamp = block.timestamp;
                     totalClaimableAmount += claimableAmount;
-
-                    // Mint TGE release amount with remaining lock time
-                    if (tgeReleaseAmount > 0) {
-                        totalUnlockedAmount += tgeReleaseAmount;
-                    }
-
-                    // Add vesting amount to unlocked amount
-                    totalUnlockedAmount += (claimableAmount - tgeReleaseAmount);
                 }
             }
         }
 
         if (totalClaimableAmount == 0) revert NoTokensAvailableToClaim();
 
-        if (totalUnlockedAmount > 0) {
-            meliesToken.mint(msg.sender, totalUnlockedAmount);
-        }
+        meliesToken.mint(msg.sender, totalClaimableAmount);
 
         emit TokensClaimed(msg.sender, totalClaimableAmount);
     }
@@ -624,56 +609,45 @@ contract MeliesICO is IMeliesICO, ReentrancyGuard, AccessControl {
      * @param _beneficiary Address of the beneficiary
      * @param _roundId ID of the sale round
      * @return claimableAmount Claimable token amount
-     * @return tgeReleaseAmount TGE release amount
-     * @return newLastClaimTimestamp New last claim timestamp
      */
     function getClaimableAmount(
         address _beneficiary,
         uint256 _roundId
-    )
-        public
-        view
-        returns (
-            uint256 claimableAmount,
-            uint256 tgeReleaseAmount,
-            uint256 newLastClaimTimestamp
-        )
-    {
+    ) public view returns (uint256 claimableAmount) {
         Allocation memory allocation = allocations[_beneficiary][_roundId];
 
         // If no tokens are allocated, no tokens are claimable
         if (allocation.totalTokenAmount == 0) {
-            return (0, 0, 0);
+            return 0;
         }
 
         // If all tokens are claimed, no tokens are claimable
         if (allocation.claimedAmount >= allocation.totalTokenAmount) {
-            return (0, 0, 0);
+            return 0;
         }
 
         SaleRound memory round = saleRounds[_roundId];
 
         // Calculate TGE release amount
-        tgeReleaseAmount =
-            (allocation.totalTokenAmount * round.tgeReleasePercentage) /
-            100;
+        uint256 tgeReleaseAmount = (allocation.totalTokenAmount *
+            round.tgeReleasePercentage) / 100;
 
         // Calculate vesting amount
         uint256 vestingAmount = allocation.totalTokenAmount - tgeReleaseAmount;
 
         // If TGE is not yet reached, no tokens are claimable
         if (block.timestamp < tgeTimestamp) {
-            return (0, 0, 0);
+            return 0;
         }
 
         // If cliff is not yet reached, only TGE release is claimable
         if (block.timestamp < tgeTimestamp + round.cliffDuration) {
             // If TGE has not been claimed yet, claim TGE
             if (allocation.lastClaimTimestamp == 0) {
-                return (tgeReleaseAmount, tgeReleaseAmount, block.timestamp);
+                return tgeReleaseAmount;
             }
             // If TGE has already been claimed, no tokens are claimable
-            return (0, 0, 0);
+            return 0;
         }
 
         // Calculate monthly vesting months
@@ -709,12 +683,10 @@ contract MeliesICO is IMeliesICO, ReentrancyGuard, AccessControl {
 
         // If no tokens are claimable, return 0
         if (claimableAmount == 0) {
-            return (0, 0, 0);
+            return 0;
         }
 
-        newLastClaimTimestamp = block.timestamp;
-
-        return (claimableAmount, tgeReleaseAmount, newLastClaimTimestamp);
+        return claimableAmount;
     }
 
     /**

@@ -118,27 +118,18 @@ contract MeliesICOVestingClaimingTest is Test {
         // Check claimable amount before cliff
         vm.warp(endRound + cliffRound - 1);
 
-        (
-            uint256 claimableAmount,
-            uint256 tgeReleaseAmount,
-            uint256 newLastClaimTimestamp
-        ) = meliesICO.getClaimableAmount(user1, 0);
+        uint256 claimableAmount = meliesICO.getClaimableAmount(user1, 0);
         assertEq(claimableAmount, 1000e8); //10% of 10000 = 1000
-        assertEq(tgeReleaseAmount, 1000e8); //10% of 10000 = 1000
 
         // Check claimable amount after cliff but before full vesting
         vm.warp(endRound + cliffRound + 1);
-        (claimableAmount, tgeReleaseAmount, newLastClaimTimestamp) = meliesICO
-            .getClaimableAmount(user1, 0);
+        claimableAmount = meliesICO.getClaimableAmount(user1, 0);
         assertEq(claimableAmount, 2500e8); //1/6 of 10000 = 1500 + 1000 (tge) = 2500
-        assertEq(tgeReleaseAmount, 1000e8); //10% of 10000 = 1000
 
         // Check claimable amount after full vesting
         vm.warp(endRound + cliffRound + vestingRound + 1);
-        (claimableAmount, tgeReleaseAmount, newLastClaimTimestamp) = meliesICO
-            .getClaimableAmount(user1, 0);
+        claimableAmount = meliesICO.getClaimableAmount(user1, 0);
         assertEq(claimableAmount, 10_000e8); // 100% of 10000 = 10000
-        assertEq(tgeReleaseAmount, 1000e8); // 10% of 10000 = 1000
     }
 
     function test_TokenClaimingPartial() public {
@@ -158,7 +149,7 @@ contract MeliesICOVestingClaimingTest is Test {
         vm.warp(endRound + cliffRound + vestingRound / 2);
 
         uint256 initialBalance = meliesToken.balanceOf(user1);
-        (uint256 claimableAmount, , ) = meliesICO.getClaimableAmount(user1, 0);
+        uint256 claimableAmount = meliesICO.getClaimableAmount(user1, 0);
 
         vm.prank(user1);
         meliesICO.claimTokens();
@@ -188,15 +179,11 @@ contract MeliesICOVestingClaimingTest is Test {
 
         uint256 initialBalance = meliesToken.balanceOf(user1);
 
-        (uint256 claimableAmount1, uint256 tgeReleaseAmount1, ) = meliesICO
-            .getClaimableAmount(user1, 0);
+        uint256 claimableAmount1 = meliesICO.getClaimableAmount(user1, 0);
 
-        (uint256 claimableAmount2, uint256 tgeReleaseAmount2, ) = meliesICO
-            .getClaimableAmount(user1, 1);
+        uint256 claimableAmount2 = meliesICO.getClaimableAmount(user1, 1);
 
-        assertEq(tgeReleaseAmount1, 2_000e8); // 10% of 20_000 = 2000
         assertEq(claimableAmount1, 11_000e8); // 3 * 18_000 / 6 = 9000 + 2000 (tge) = 11_000
-        assertEq(tgeReleaseAmount2, 0); // 0% of 5_000 = 0
         assertEq(claimableAmount2, 625e8); // 1 * 5_000 / 8 = 625
         vm.prank(user1);
         meliesICO.claimTokens();
@@ -254,7 +241,7 @@ contract MeliesICOVestingClaimingTest is Test {
 
         // Check claimable amount immediately after purchase
         vm.warp(endTime + 1);
-        (uint256 claimableAmount, , ) = meliesICO.getClaimableAmount(user1, 0);
+        uint256 claimableAmount = meliesICO.getClaimableAmount(user1, 0);
         assertEq(
             claimableAmount,
             2_500e8 // 10% of 10_000 = 1_000 + 1 * 9_000 / 6 = 1_500
@@ -298,7 +285,7 @@ contract MeliesICOVestingClaimingTest is Test {
 
         // Check claimable amount after cliff/vesting ends
         vm.warp(endTime + 180 days);
-        (uint256 claimableAmount, , ) = meliesICO.getClaimableAmount(user1, 0);
+        uint256 claimableAmount = meliesICO.getClaimableAmount(user1, 0);
         assertEq(claimableAmount, 10_000e8);
     }
 
@@ -328,7 +315,7 @@ contract MeliesICOVestingClaimingTest is Test {
         );
 
         // Check that claiming again will not work
-        (uint256 claimableAmount, , ) = meliesICO.getClaimableAmount(user1, 0);
+        uint256 claimableAmount = meliesICO.getClaimableAmount(user1, 0);
         assertEq(claimableAmount, 0);
 
         // Claim at 50% vesting
@@ -383,8 +370,8 @@ contract MeliesICOVestingClaimingTest is Test {
         vm.warp(endRound + cliffRound + vestingRound / 2);
 
         // Check claimable amounts
-        (uint256 user1Claimable, , ) = meliesICO.getClaimableAmount(user1, 0);
-        (uint256 user2Claimable, , ) = meliesICO.getClaimableAmount(user2, 0);
+        uint256 user1Claimable = meliesICO.getClaimableAmount(user1, 0);
+        uint256 user2Claimable = meliesICO.getClaimableAmount(user2, 0);
         assertEq(
             user1Claimable,
             7000e8, // 10% of 10_000 = 1_000 + 4 * 9_000 / 6 = 7_000
@@ -444,7 +431,7 @@ contract MeliesICOVestingClaimingTest is Test {
 
         // Check claimable amount after cliff/vesting ends
         vm.warp(endTime + 900 days);
-        (uint256 claimableAmount, , ) = meliesICO.getClaimableAmount(user1, 0);
+        uint256 claimableAmount = meliesICO.getClaimableAmount(user1, 0);
         assertEq(claimableAmount, 10_000e8);
     }
 
@@ -481,7 +468,7 @@ contract MeliesICOVestingClaimingTest is Test {
         vm.warp(endTime + 30 days + 180 days / 2);
 
         // Check claimable amount
-        (uint256 claimableAmount, , ) = meliesICO.getClaimableAmount(user1, 0);
+        uint256 claimableAmount = meliesICO.getClaimableAmount(user1, 0);
         assertEq(
             claimableAmount,
             70_000_000e8 // 10% of 100_000_000 = 10_000_000 + 4 * 90_000_000 / 6 = 70_000_000
@@ -498,7 +485,7 @@ contract MeliesICOVestingClaimingTest is Test {
         vm.warp(endTime + 30 days + 180 days + 1);
 
         // Check claimable amount
-        (claimableAmount, , ) = meliesICO.getClaimableAmount(user1, 0);
+        claimableAmount = meliesICO.getClaimableAmount(user1, 0);
         assertEq(claimableAmount, 30_000_000e8);
 
         // Claim tokens
@@ -526,7 +513,7 @@ contract MeliesICOVestingClaimingTest is Test {
         vm.warp(endRound + cliffRound + vestingRound + 1);
 
         // Check claimable amount
-        (uint256 claimableAmount, , ) = meliesICO.getClaimableAmount(user2, 0);
+        uint256 claimableAmount = meliesICO.getClaimableAmount(user2, 0);
         assertEq(claimableAmount, 1_000_000e8);
 
         // Claim tokens
@@ -585,7 +572,7 @@ contract MeliesICOVestingClaimingTest is Test {
         );
 
         // Verify no tokens are claimable
-        (uint256 claimableAmount, , ) = meliesICO.getClaimableAmount(user1, 0);
+        uint256 claimableAmount = meliesICO.getClaimableAmount(user1, 0);
         assertEq(
             claimableAmount,
             0,
@@ -794,7 +781,7 @@ contract MeliesICOVestingClaimingTest is Test {
 
         // Fast forward to before the new cliff ends
         vm.warp(tgeTime + newCliff - 1);
-        (uint256 claimableAmount, , ) = meliesICO.getClaimableAmount(user1, 0);
+        uint256 claimableAmount = meliesICO.getClaimableAmount(user1, 0);
         assertEq(
             claimableAmount,
             1_000e8, // 10% of 10_000e8
@@ -802,21 +789,21 @@ contract MeliesICOVestingClaimingTest is Test {
         );
         // Check claimable amount at various points
         vm.warp(tgeTime + newCliff + 1);
-        (claimableAmount, , ) = meliesICO.getClaimableAmount(user1, 0);
+        claimableAmount = meliesICO.getClaimableAmount(user1, 0);
         assertEq(
             claimableAmount,
             2_125e8 // 10% of 10_000e8 + 1 / 8 of 9_000e8 = 1_000e8 + 1_125e8
         );
 
         vm.warp(tgeTime + newCliff + newVesting / 2 + 1);
-        (claimableAmount, , ) = meliesICO.getClaimableAmount(user1, 0);
+        claimableAmount = meliesICO.getClaimableAmount(user1, 0);
         assertEq(
             claimableAmount,
             6_625e8 // 10% of 10_000e8 + 5 / 8 of 9_000e8 = 1_000e8 + 5_625e8 = 6_625e8
         );
 
         vm.warp(tgeTime + newCliff + newVesting + 1);
-        (claimableAmount, , ) = meliesICO.getClaimableAmount(user1, 0);
+        claimableAmount = meliesICO.getClaimableAmount(user1, 0);
         assertEq(
             claimableAmount,
             10000e8,
@@ -850,7 +837,7 @@ contract MeliesICOVestingClaimingTest is Test {
         meliesICO.adjustCliffAndVesting(0, 0, newVesting);
 
         // Check claimable amount at various points
-        (uint256 claimableAmount, , ) = meliesICO.getClaimableAmount(user1, 0);
+        uint256 claimableAmount = meliesICO.getClaimableAmount(user1, 0);
         assertEq(
             claimableAmount,
             0 // 10% of 10_000e8 + 2 / 12 of 9_000e8 = 1_000e8 + 1_500e8 = 2_500e8 - 4_000e8 (already claimed) -> 0
@@ -858,21 +845,21 @@ contract MeliesICOVestingClaimingTest is Test {
 
         // New month, token claimed are above the possible amount with new vesting, so no new tokens are claimable
         vm.warp(endTime + initialCliff + 2 * 30 days + 1);
-        (claimableAmount, , ) = meliesICO.getClaimableAmount(user1, 0);
+        claimableAmount = meliesICO.getClaimableAmount(user1, 0);
         assertEq(
             claimableAmount,
             0 // 10% of 10_000e8 + 3 / 12 of 9_000e8 = 1_000e8 + 2_250e8 = 3_250e8 - 4_000e8 (already claimed) -> 0
         );
 
         vm.warp(endTime + initialCliff + newVesting / 2 + 1);
-        (claimableAmount, , ) = meliesICO.getClaimableAmount(user1, 0);
+        claimableAmount = meliesICO.getClaimableAmount(user1, 0);
         assertEq(
             claimableAmount,
             6_250e8 - 4_000e8 // 10% of 10_000e8 + 7 / 12 of 9_000e8 = 1_000e8 + 5_250e8 = 6_250e8 - 4_000e8 (already claimed)
         );
 
         vm.warp(endTime + initialCliff + newVesting + 1);
-        (claimableAmount, , ) = meliesICO.getClaimableAmount(user1, 0);
+        claimableAmount = meliesICO.getClaimableAmount(user1, 0);
         assertEq(
             claimableAmount,
             6000e8, // 10% of 10_000e8 + 12 / 12 of 9_000e8 = 1_000e8 + 9_000e8 = 10_000e8 - 4_000e8 (already claimed)
@@ -905,8 +892,8 @@ contract MeliesICOVestingClaimingTest is Test {
 
         // Check claimable amounts for both rounds
         vm.warp(endTime + 180 days);
-        (uint256 claimableAmount1, , ) = meliesICO.getClaimableAmount(user1, 0);
-        (uint256 claimableAmount2, , ) = meliesICO.getClaimableAmount(user1, 1);
+        uint256 claimableAmount1 = meliesICO.getClaimableAmount(user1, 0);
+        uint256 claimableAmount2 = meliesICO.getClaimableAmount(user1, 1);
 
         assertEq(
             claimableAmount1,
