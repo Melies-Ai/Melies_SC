@@ -57,20 +57,22 @@ contract MeliesTokenDistributor is AccessControl, ReentrancyGuard {
      * @param _tgeTimestamp TGE timestamp
      * @param admin Address of the admin
      * @param communityAddress Address for community fund
-     * @param foundationAddress Address for foundation
+     * @param treasuryAddress Address for treasury
      * @param partnersAddress Address for partners & advisors
      * @param teamAddress Address for team
      * @param liquidityAddress Address for liquidity
+     * @param aiSystemsAddress Address for AI systems
      */
     constructor(
         address _meliesToken,
         uint256 _tgeTimestamp,
         address admin,
         address communityAddress,
-        address foundationAddress,
+        address treasuryAddress,
         address partnersAddress,
         address teamAddress,
-        address liquidityAddress
+        address liquidityAddress,
+        address aiSystemsAddress
     ) {
         meliesToken = Melies(_meliesToken);
         tgeTimestamp = _tgeTimestamp;
@@ -80,10 +82,11 @@ contract MeliesTokenDistributor is AccessControl, ReentrancyGuard {
 
         setupInitialAllocations(
             communityAddress,
-            foundationAddress,
+            treasuryAddress,
             partnersAddress,
             teamAddress,
-            liquidityAddress
+            liquidityAddress,
+            aiSystemsAddress
         );
     }
 
@@ -113,39 +116,51 @@ contract MeliesTokenDistributor is AccessControl, ReentrancyGuard {
     /**
      * @dev Sets up initial allocations
      * @param communityAddress Address for community fund
-     * @param foundationAddress Address for foundation
+     * @param treasuryAddress Address for treasury
      * @param partnersAddress Address for partners & advisors
      * @param teamAddress Address for team
      * @param liquidityAddress Address for liquidity
+     * @param aiSystemsAddress Address for AI systems
      */
     function setupInitialAllocations(
         address communityAddress,
-        address foundationAddress,
+        address treasuryAddress,
         address partnersAddress,
         address teamAddress,
-        address liquidityAddress
+        address liquidityAddress,
+        address aiSystemsAddress
     ) internal {
-        // Community Fund: 45M tokens, no cliff, 48 months vesting, 2.04% TGE
-        addAllocation(communityAddress, 45_000_000e8, 0, 48, "Community", 204);
+        // Community Fund: 200M tokens, no cliff, 48 months vesting, 2.08% TGE
+        addAllocation(communityAddress, 200_000_000e8, 0, 48, "Community", 208);
 
-        // Foundation: 30M tokens, 6 months cliff, 42 months vesting, 5.00% TGE
+        // Treasury: 100M tokens, no cliff, 48 months vesting, 5.00% TGE
+        addAllocation(treasuryAddress, 100_000_000e8, 0, 48, "Treasury", 500);
+
+        // Partners & Advisors: 100M tokens, no cliff, 18 months vesting, 10.00% TGE
+        addAllocation(partnersAddress, 100_000_000e8, 0, 18, "Partners", 1000);
+
+        // Team: 100M tokens, 12 months cliff, 20 months vesting, 0.00% TGE
+        addAllocation(teamAddress, 100_000_000e8, 12, 20, "Team", 0);
+
+        // Liquidity: 100M tokens, available at TGE, 100.00% TGE
         addAllocation(
-            foundationAddress,
-            30_000_000e8,
-            6,
-            42,
-            "Foundation",
-            500
+            liquidityAddress,
+            100_000_000e8,
+            0,
+            1,
+            "Liquidity",
+            10000
         );
 
-        // Partners & Advisors: 25M tokens, 6 months cliff, 24 months vesting, 5.00% TGE
-        addAllocation(partnersAddress, 25_000_000e8, 6, 24, "Partners", 500);
-
-        // Team: 20M tokens, 24 months cliff, 24 months vesting, 1.00% TGE
-        addAllocation(teamAddress, 20_000_000e8, 24, 24, "Team", 100);
-
-        // Liquidity: 20M tokens, available at TGE, 100.00% TGE
-        addAllocation(liquidityAddress, 20_000_000e8, 0, 1, "Liquidity", 10000);
+        // AI Systems: 100M tokens, no cliff, 18 months vesting, 10.00% TGE
+        addAllocation(
+            aiSystemsAddress,
+            100_000_000e8,
+            0,
+            18,
+            "AI Systems",
+            1000
+        );
     }
 
     /**

@@ -22,10 +22,11 @@ contract MeliesScript is Script {
 
     // Add addresses for token distribution
     address constant COMMUNITY_ADDRESS = address(0); // Replace with actual address
-    address constant FOUNDATION_ADDRESS = address(0); // Replace with actual address
+    address constant TREASURY_ADDRESS = address(0); // Replace with actual address
     address constant PARTNERS_ADDRESS = address(0); // Replace with actual address
     address constant TEAM_ADDRESS = address(0); // Replace with actual address
     address constant LIQUIDITY_ADDRESS = address(0); // Replace with actual address
+    address constant AI_SYSTEMS_ADDRESS = address(0); // Replace with actual address
 
     function setUp() public {}
 
@@ -57,10 +58,11 @@ contract MeliesScript is Script {
             initialTgeTimestamp,
             defaultAdmin,
             COMMUNITY_ADDRESS,
-            FOUNDATION_ADDRESS,
+            TREASURY_ADDRESS,
             PARTNERS_ADDRESS,
             TEAM_ADDRESS,
-            LIQUIDITY_ADDRESS
+            LIQUIDITY_ADDRESS,
+            AI_SYSTEMS_ADDRESS
         );
         console.log("TokenDistributor deployed at:", address(tokenDistributor));
 

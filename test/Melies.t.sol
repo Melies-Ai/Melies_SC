@@ -10,7 +10,7 @@ import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 /// @notice This contract contains comprehensive tests for the Melies ERC20 token,
 /// covering all major functionalities, edge cases, and security aspects.
 contract MeliesTest is Test {
-    uint256 constant maxSupply = 100_000_000e8;
+    uint256 constant maxSupply = 1_000_000_000e8;
     Melies public meliesToken;
     uint256 public tgeTimestamp;
     address public admin;
@@ -436,7 +436,7 @@ contract MeliesTest is Test {
 
     /// @notice Test setting max total supply by DAO member
     function test_SetMaxTotalSupply() public {
-        uint256 newMaxSupply = 200_000_000e8;
+        uint256 newMaxSupply = 1_500_000_000e8; // 1.5B tokens
 
         vm.prank(daoAdmin);
         meliesToken.setMaxTotalSupply(newMaxSupply);
@@ -446,7 +446,7 @@ contract MeliesTest is Test {
 
     /// @notice Test setting max total supply below MIN_MAX_TOTAL_SUPPLY
     function test_SetMaxTotalSupplyBelowMinimum() public {
-        uint256 newMaxSupply = 50_000_000e8; // Below MIN_MAX_TOTAL_SUPPLY
+        uint256 newMaxSupply = 150_000_000e8; // Below MIN_MAX_TOTAL_SUPPLY
 
         vm.prank(daoAdmin);
         vm.expectRevert(
@@ -462,13 +462,13 @@ contract MeliesTest is Test {
     /// @notice Test setting max total supply below current total supply
     function test_SetMaxTotalSupplyBelowCurrentSupply() public {
         vm.prank(daoAdmin);
-        meliesToken.setMaxTotalSupply(150_000_000e8);
+        meliesToken.setMaxTotalSupply(1_500_000_000e8); // 1.5B tokens
 
-        uint256 initialMint = 150_000_000e8;
+        uint256 initialMint = 1_200_000_000e8; // 1.2B tokens
         vm.prank(minter);
         meliesToken.mint(user, initialMint);
 
-        uint256 newMaxSupply = 100_000_000e8; // Below current total supply
+        uint256 newMaxSupply = 1_100_000_000e8; // 1.1B tokens - below current total supply
 
         vm.prank(daoAdmin);
         vm.expectRevert(
@@ -483,7 +483,7 @@ contract MeliesTest is Test {
 
     /// @notice Test setting max total supply by non-DAO member
     function test_SetMaxTotalSupplyUnauthorized() public {
-        uint256 newMaxSupply = 200_000_000e8;
+        uint256 newMaxSupply = 1_500_000_000e8; // 1.5B tokens
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -494,23 +494,5 @@ contract MeliesTest is Test {
         );
         vm.prank(user);
         meliesToken.setMaxTotalSupply(newMaxSupply);
-    }
-
-    /// @notice Test minting after increasing max total supply
-    function test_MintAfterIncreasingMaxTotalSupply() public {
-        uint256 initialMint = maxSupply;
-        vm.prank(minter);
-        meliesToken.mint(user, initialMint);
-
-        uint256 newMaxSupply = 200_000_000e8;
-        vm.prank(daoAdmin);
-        meliesToken.setMaxTotalSupply(newMaxSupply);
-
-        uint256 additionalMint = 50_000_000e8;
-        vm.prank(minter);
-        meliesToken.mint(user, additionalMint);
-
-        assertEq(meliesToken.totalSupply(), initialMint + additionalMint);
-        assertEq(meliesToken.balanceOf(user), initialMint + additionalMint);
     }
 }

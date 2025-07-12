@@ -30,9 +30,9 @@ contract Melies is
     bytes32 public constant DAO_ADMIN_ROLE = keccak256("DAO_ADMIN_ROLE");
 
     // Maximum total supply for the token
-    uint256 public constant MIN_MAX_TOTAL_SUPPLY = 100_000_000e8;
+    uint256 public constant MIN_MAX_TOTAL_SUPPLY = 1_000_000_000e8;
     uint256 public constant MAX_TOKEN_BURN = 900_000e8;
-    uint256 public maxTotalSupply = 100_000_000e8;
+    uint256 public maxTotalSupply = 1_000_000_000e8;
 
     address public _stakingContract;
 
