@@ -15,6 +15,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 contract MockMeliesICO is MeliesICO {
     constructor(
         address _meliesToken,
+        address _tokenDistributor,
         address _usdcToken,
         address _usdtToken,
         address _uniswapRouter,
@@ -23,6 +24,7 @@ contract MockMeliesICO is MeliesICO {
     )
         MeliesICO(
             _meliesToken,
+            _tokenDistributor,
             _usdcToken,
             _usdtToken,
             _uniswapRouter,

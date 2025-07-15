@@ -60,6 +60,7 @@ contract MeliesICOTest is Test {
         // Deploy MeliesICO
         meliesICO = new MockMeliesICO(
             address(meliesToken),
+            address(0x1234), // Temporary tokenDistributor address
             address(usdcToken),
             address(usdtToken),
             address(uniswapRouter),
@@ -406,23 +407,6 @@ contract MeliesICOTest is Test {
         );
         meliesICO.buyWithUsdc(1000e6);
         vm.stopPrank();
-    }
-
-    function test_TokensClaimedEvent() public {
-        setupSaleRoundAndPurchase();
-        uint256 endRound = block.timestamp + 7 days;
-        setupTgeTimestamp(endRound);
-        vm.warp(endRound);
-
-        vm.prank(admin);
-        meliesICO.endIco();
-
-        vm.warp(endRound + 30 days + 1);
-
-        vm.expectEmit(true, false, false, true);
-        emit IMeliesICO.TokensClaimed(user1, 2500e8);
-        vm.prank(user1);
-        meliesICO.claimTokens();
     }
 
     function test_FutureRoundUpdatedEvent() public {

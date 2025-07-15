@@ -51,18 +51,12 @@ interface IMeliesICO {
 
     /**
      * @dev Struct representing an allocation for a beneficiary
-     * @param totalTokenAmount Total amount of tokens allocated
-     * @param totalUsdcAmount Total amount of USDC allocated
-     * @param totalUsdtAmount Total amount of USDT allocated
-     * @param claimedAmount Amount of tokens claimed
-     * @param lastClaimTimestamp Last claim timestamp
+     * @param totalUsdcAmount Total amount of USDC spent
+     * @param totalUsdtAmount Total amount of USDT spent
      */
     struct Allocation {
-        uint256 totalTokenAmount;
         uint256 totalUsdcAmount;
         uint256 totalUsdtAmount;
-        uint256 claimedAmount;
-        uint256 lastClaimTimestamp;
     }
 
     // Events
@@ -172,13 +166,6 @@ interface IMeliesICO {
     );
 
     /**
-     * @dev Emitted when tokens are claimed
-     * @param beneficiary Address of the beneficiary claiming tokens
-     * @param amount Amount of tokens claimed
-     */
-    event TokensClaimed(address indexed beneficiary, uint256 amount);
-
-    /**
      * @dev Emitted when addresses are added to the whitelist
      * @param roundId ID of the sale round
      * @param addresses Array of addresses added to the whitelist
@@ -197,18 +184,6 @@ interface IMeliesICO {
      * @param roundId ID of the updated round
      */
     event FutureRoundUpdated(uint256 indexed roundId);
-
-    /**
-     * @dev Emitted when cliff and vesting are adjusted
-     * @param roundId ID of the round
-     * @param newCliffDuration New cliff duration
-     * @param newVestingDuration New vesting duration
-     */
-    event CliffAndVestingAdjusted(
-        uint256 indexed roundId,
-        uint256 newCliffDuration,
-        uint256 newVestingDuration
-    );
 
     // Errors
     error SlippageToleranceTooHigh();
@@ -243,8 +218,7 @@ interface IMeliesICO {
     error CannotRecoverUsdcTokens();
     error CannotRecoverUsdtTokens();
     error InsufficientTokenBalance();
-    error ClaimingNotEnabled();
-    error NoTokensAvailableToClaim();
+
     error NoEthToWithdraw();
     error EthTransferFailed();
     error NoActiveRound();
@@ -382,34 +356,6 @@ interface IMeliesICO {
      * @param _amount Amount of tokens to recover
      */
     function recoverTokens(address _token, uint256 _amount) external;
-
-    /**
-     * @dev Allows users to claim their tokens
-     */
-    function claimTokens() external;
-
-    /**
-     * @dev Allows admin to adjust cliff or vesting of a round (as part of DAO vote area)
-     * @param _roundId ID of the round to adjust
-     * @param _newCliffDuration New cliff duration
-     * @param _newVestingDuration New vesting duration
-     */
-    function adjustCliffAndVesting(
-        uint256 _roundId,
-        uint256 _newCliffDuration,
-        uint256 _newVestingDuration
-    ) external;
-
-    /**
-     * @dev Calculates the claimable amount for a specific allocation.
-     * @param _beneficiary Address of the beneficiary
-     * @param _roundId ID of the sale round
-     * @return claimableAmount Claimable token amount
-     */
-    function getClaimableAmount(
-        address _beneficiary,
-        uint256 _roundId
-    ) external view returns (uint256 claimableAmount);
 
     /**
      * @dev Retrieves the current active sale round

@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 import "../src/MeliesICO.sol";
 import "../src/interfaces/IMeliesICO.sol";
 import "../src/Melies.sol";
+import "../src/MeliesTokenDistributor.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/IAccessControl.sol";
 
@@ -15,6 +16,7 @@ import {MockChainlinkAggregator} from "../src/mock/MockChainlinkAggregator.sol";
 
 contract MeliesICOAdminTest is Test {
     MockMeliesICO public meliesICO;
+    MeliesTokenDistributor public tokenDistributor;
     Melies public meliesToken;
     uint256 public tgeTimestamp;
     MockERC20 public usdcToken;
@@ -54,8 +56,22 @@ contract MeliesICOAdminTest is Test {
         uniswapRouter = new MockUniswapV2Router02();
         ethUsdPriceFeed = new MockChainlinkAggregator();
 
+        // Deploy TokenDistributor first
+        tokenDistributor = new MeliesTokenDistributor(
+            address(meliesToken),
+            TGE_TIMESTAMP,
+            admin,
+            address(0x111), // Community
+            address(0x222), // Treasury
+            address(0x333), // Partners
+            address(0x444), // Team
+            address(0x555), // Liquidity
+            address(0x666) // AI Systems
+        );
+
         meliesICO = new MockMeliesICO(
             address(meliesToken),
+            address(tokenDistributor),
             address(usdcToken),
             address(usdtToken),
             address(uniswapRouter),
@@ -63,7 +79,16 @@ contract MeliesICOAdminTest is Test {
             TGE_TIMESTAMP
         );
 
+        // Grant roles
         meliesToken.grantRole(meliesToken.MINTER_ROLE(), address(meliesICO));
+        meliesToken.grantRole(
+            meliesToken.MINTER_ROLE(),
+            address(tokenDistributor)
+        );
+        tokenDistributor.grantRole(
+            tokenDistributor.ICO_ROLE(),
+            address(meliesICO)
+        );
     }
 
     function test_AddAndRemoveAdminRole() public {
@@ -488,23 +513,6 @@ contract MeliesICOAdminTest is Test {
         vm.prank(admin);
         vm.expectRevert(IMeliesICO.CannotRecoverUsdtTokens.selector);
         meliesICO.recoverTokens(address(usdtToken), 1000e6);
-    }
-
-    function test_OnlyAdminCanAdjustCliffAndVesting() public {
-        setupSaleRound();
-
-        vm.prank(admin);
-        meliesICO.adjustCliffAndVesting(0, 60 days, 240 days);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                user1,
-                meliesICO.ADMIN_ROLE()
-            )
-        );
-        vm.prank(user1);
-        meliesICO.adjustCliffAndVesting(0, 90 days, 300 days);
     }
 
     // Helper functions

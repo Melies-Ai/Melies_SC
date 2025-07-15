@@ -8,6 +8,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@chainlink/contracts/src/interfaces/feeds/AggregatorV3Interface.sol";
 import {IUniswapV2Router02} from "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "./Melies.sol";
+import "./MeliesTokenDistributor.sol";
 import "./interfaces/IMeliesICO.sol";
 
 /**
@@ -22,6 +23,7 @@ contract MeliesICO is IMeliesICO, ReentrancyGuard, AccessControl {
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
 
     Melies public meliesToken;
+    MeliesTokenDistributor public tokenDistributor;
     IERC20 public usdcToken;
     IERC20 public usdtToken;
     IUniswapV2Router02 public uniswapRouter;
@@ -47,6 +49,7 @@ contract MeliesICO is IMeliesICO, ReentrancyGuard, AccessControl {
     /**
      * @dev Constructor to initialize the MeliesICO contract
      * @param _meliesToken Address of the Melies token contract
+     * @param _tokenDistributor Address of the MeliesTokenDistributor contract
      * @param _usdcToken Address of the USDC token contract
      * @param _usdtToken Address of the USDT token contract
      * @param _uniswapRouter Address of the Uniswap V2 Router
@@ -55,6 +58,7 @@ contract MeliesICO is IMeliesICO, ReentrancyGuard, AccessControl {
      */
     constructor(
         address _meliesToken,
+        address _tokenDistributor,
         address _usdcToken,
         address _usdtToken,
         address _uniswapRouter,
@@ -62,6 +66,7 @@ contract MeliesICO is IMeliesICO, ReentrancyGuard, AccessControl {
         uint256 _tgeTimestamp
     ) {
         meliesToken = Melies(_meliesToken);
+        tokenDistributor = MeliesTokenDistributor(_tokenDistributor);
         usdcToken = IERC20(_usdcToken);
         usdtToken = IERC20(_usdtToken);
         uniswapRouter = IUniswapV2Router02(_uniswapRouter);
@@ -71,6 +76,14 @@ contract MeliesICO is IMeliesICO, ReentrancyGuard, AccessControl {
         _grantRole(ADMIN_ROLE, msg.sender);
 
         tgeTimestamp = _tgeTimestamp;
+    }
+
+    /**
+     * @dev Grants ICO role to this contract in the token distributor (admin only)
+     * This should be called after deployment to enable allocation creation
+     */
+    function grantIcoRole() external onlyRole(ADMIN_ROLE) {
+        tokenDistributor.grantRole(tokenDistributor.ICO_ROLE(), address(this));
     }
 
     /**
@@ -341,20 +354,54 @@ contract MeliesICO is IMeliesICO, ReentrancyGuard, AccessControl {
         if (_usdcAmount == 0 && _usdtAmount == 0)
             revert UsdAmountCannotBeZero();
 
+        // Track USD amounts for refund purposes
         Allocation storage allocation = allocations[_beneficiary][_roundId];
-
-        allocation.totalTokenAmount += _tokenAmount;
         allocation.totalUsdcAmount += _usdcAmount;
         allocation.totalUsdtAmount += _usdtAmount;
+
+        // Create allocation in MeliesTokenDistributor for vesting/claiming
+        SaleRound memory round = saleRounds[_roundId];
+        string memory roundName = _getRoundName(_roundId);
+
+        // Convert TGE percentage from 0-100 to basis points (0-10000)
+        uint256 tgeReleasePercentageBps = round.tgeReleasePercentage * 100;
+
+        // Convert cliff and vesting duration from seconds to months
+        uint256 cliffMonths = round.cliffDuration / 30 days;
+        uint256 vestingMonths = round.vestingDuration / 30 days;
+
+        tokenDistributor.addAllocation(
+            _beneficiary,
+            _tokenAmount,
+            cliffMonths,
+            vestingMonths,
+            roundName,
+            tgeReleasePercentageBps,
+            false
+        );
 
         emit AllocationAdded(
             _beneficiary,
             _tokenAmount,
             tgeTimestamp,
-            saleRounds[_roundId].cliffDuration,
-            saleRounds[_roundId].vestingDuration,
+            round.cliffDuration,
+            round.vestingDuration,
             _roundId
         );
+    }
+
+    /**
+     * @dev Internal function to get round name based on round ID
+     * @param _roundId ID of the sale round
+     * @return Round name string
+     */
+    function _getRoundName(
+        uint256 _roundId
+    ) internal pure returns (string memory) {
+        if (_roundId == 0) return "Seed";
+        if (_roundId == 1) return "Private Sale";
+        if (_roundId == 2) return "Public Sale";
+        return string(abi.encodePacked("Round ", _roundId));
     }
 
     /**
@@ -406,6 +453,12 @@ contract MeliesICO is IMeliesICO, ReentrancyGuard, AccessControl {
         }
 
         claimEnabled = allRoundsSoftCapReached;
+
+        // Distribute unsold tokens if all rounds reached soft cap
+        if (allRoundsSoftCapReached) {
+            tokenDistributor.distributeUnsoldTokens();
+        }
+
         emit IcoEnded(claimEnabled);
     }
 
@@ -430,7 +483,6 @@ contract MeliesICO is IMeliesICO, ReentrancyGuard, AccessControl {
                     totalRefundUsdtAmount += allocation.totalUsdtAmount;
                     allocation.totalUsdcAmount = 0;
                     allocation.totalUsdtAmount = 0;
-                    allocation.totalTokenAmount = 0;
                 }
             }
         }
@@ -464,7 +516,6 @@ contract MeliesICO is IMeliesICO, ReentrancyGuard, AccessControl {
 
         allocation.totalUsdcAmount = 0;
         allocation.totalUsdtAmount = 0;
-        allocation.totalTokenAmount = 0;
         if (refundUsdcAmount > 0) {
             usdcToken.safeTransfer(msg.sender, refundUsdcAmount);
         }
@@ -534,162 +585,6 @@ contract MeliesICO is IMeliesICO, ReentrancyGuard, AccessControl {
     }
 
     /**
-     * @dev Allows users to claim their tokens
-     */
-    function claimTokens() external nonReentrant {
-        if (!icoEnded) revert IcoNotEndedYet();
-        if (!claimEnabled) revert ClaimingNotEnabled();
-
-        uint256 totalClaimableAmount = 0;
-
-        // for each sales round
-        for (uint256 i = 0; i < saleRounds.length; i++) {
-            Allocation storage allocation = allocations[msg.sender][i];
-            if (allocation.totalTokenAmount > 0) {
-                uint256 claimableAmount = getClaimableAmount(msg.sender, i);
-                if (claimableAmount > 0) {
-                    allocation.claimedAmount += claimableAmount;
-                    allocation.lastClaimTimestamp = block.timestamp;
-                    totalClaimableAmount += claimableAmount;
-                }
-            }
-        }
-
-        if (totalClaimableAmount == 0) revert NoTokensAvailableToClaim();
-
-        meliesToken.mint(msg.sender, totalClaimableAmount);
-
-        emit TokensClaimed(msg.sender, totalClaimableAmount);
-    }
-
-    /**
-     * @dev Allows admin to adjust cliff or vesting of a round (as part of DAO vote area)
-     * @param _roundId ID of the round to adjust
-     * @param _newCliffDuration New cliff duration
-     * @param _newVestingDuration New vesting duration
-     */
-    function adjustCliffAndVesting(
-        uint256 _roundId,
-        uint256 _newCliffDuration,
-        uint256 _newVestingDuration
-    ) external onlyRole(ADMIN_ROLE) {
-        SaleRound storage round = saleRounds[_roundId];
-
-        bool isChangeApplied = false;
-        // can't adjust cliff after the current cliff end time
-        if (block.timestamp < (tgeTimestamp + round.cliffDuration)) {
-            round.cliffDuration = _newCliffDuration;
-            isChangeApplied = true;
-        }
-
-        // can't adjust vesting duration after the current vesting end time
-        if (
-            block.timestamp <
-            (tgeTimestamp + round.cliffDuration + round.vestingDuration)
-        ) {
-            round.vestingDuration = _newVestingDuration;
-            isChangeApplied = true;
-        }
-
-        // max cliff + vesting duration is 48 months
-        if ((round.cliffDuration + round.vestingDuration) > 48 * 30 days)
-            revert InvalidCliffOrVestingAdjustment();
-
-        if (!isChangeApplied) revert InvalidCliffOrVestingAdjustment();
-
-        emit CliffAndVestingAdjusted(
-            _roundId,
-            _newCliffDuration,
-            _newVestingDuration
-        );
-    }
-
-    /**
-     * @dev Calculates the claimable amount for a specific allocation.
-     * @param _beneficiary Address of the beneficiary
-     * @param _roundId ID of the sale round
-     * @return claimableAmount Claimable token amount
-     */
-    function getClaimableAmount(
-        address _beneficiary,
-        uint256 _roundId
-    ) public view returns (uint256 claimableAmount) {
-        Allocation memory allocation = allocations[_beneficiary][_roundId];
-
-        // If no tokens are allocated, no tokens are claimable
-        if (allocation.totalTokenAmount == 0) {
-            return 0;
-        }
-
-        // If all tokens are claimed, no tokens are claimable
-        if (allocation.claimedAmount >= allocation.totalTokenAmount) {
-            return 0;
-        }
-
-        SaleRound memory round = saleRounds[_roundId];
-
-        // Calculate TGE release amount
-        uint256 tgeReleaseAmount = (allocation.totalTokenAmount *
-            round.tgeReleasePercentage) / 100;
-
-        // Calculate vesting amount
-        uint256 vestingAmount = allocation.totalTokenAmount - tgeReleaseAmount;
-
-        // If TGE is not yet reached, no tokens are claimable
-        if (block.timestamp < tgeTimestamp) {
-            return 0;
-        }
-
-        // If cliff is not yet reached, only TGE release is claimable
-        if (block.timestamp < tgeTimestamp + round.cliffDuration) {
-            // If TGE has not been claimed yet, claim TGE
-            if (allocation.lastClaimTimestamp == 0) {
-                return tgeReleaseAmount;
-            }
-            // If TGE has already been claimed, no tokens are claimable
-            return 0;
-        }
-
-        // Calculate monthly vesting months
-        uint256 vestingMonths = round.vestingDuration / 30 days;
-        if (vestingMonths == 0) vestingMonths = 1;
-
-        // Calculate months since cliff
-        uint256 timeSinceCliff = block.timestamp -
-            (tgeTimestamp + round.cliffDuration);
-        uint256 fullMonthsPassed = 1 + (timeSinceCliff / 30 days);
-
-        uint256 totalClaimableAmount;
-        if (fullMonthsPassed > vestingMonths) {
-            totalClaimableAmount = allocation.totalTokenAmount;
-        } else {
-            totalClaimableAmount =
-                tgeReleaseAmount +
-                (vestingAmount * fullMonthsPassed) /
-                vestingMonths;
-        }
-
-        // Calculate claimable amount (actual total - already claimed)
-        if (allocation.claimedAmount > totalClaimableAmount) {
-            claimableAmount = 0;
-        } else {
-            claimableAmount = totalClaimableAmount - allocation.claimedAmount;
-        }
-
-        // TGE tokens are claimable only once
-        if (allocation.lastClaimTimestamp != 0) {
-            tgeReleaseAmount = 0;
-        }
-
-        // If no tokens are claimable, return 0
-        if (claimableAmount == 0) {
-            return 0;
-        }
-
-        return claimableAmount;
-    }
-
-    /**
      * @dev Retrieves the current active sale round
      * @return The current SaleRound struct
      */
@@ -736,5 +631,37 @@ contract MeliesICO is IMeliesICO, ReentrancyGuard, AccessControl {
         (, int256 price, , , ) = ethUsdPriceFeed.latestRoundData();
         if (price <= 0) revert InvalidEthUsdPrice();
         return uint256(price);
+    }
+
+    /**
+     * @dev Gets the total tokens sold across all ICO rounds
+     * @return Total tokens sold
+     */
+    function getTotalTokensSold() external view returns (uint256) {
+        return tokenDistributor.getTotalTokensSold();
+    }
+
+    /**
+     * @dev Gets the total unsold tokens
+     * @return Total unsold tokens
+     */
+    function getUnsoldTokens() external view returns (uint256) {
+        return tokenDistributor.getUnsoldTokens();
+    }
+
+    /**
+     * @dev Gets the sales performance percentage
+     * @return Sales performance as a percentage (0-100)
+     */
+    function getSalesPerformance() external view returns (uint256) {
+        return tokenDistributor.getSalesPerformance();
+    }
+
+    /**
+     * @dev Checks if unsold tokens have been distributed
+     * @return True if unsold tokens have been distributed
+     */
+    function isUnsoldTokensDistributed() external view returns (bool) {
+        return tokenDistributor.isUnsoldTokensDistributed();
     }
 }

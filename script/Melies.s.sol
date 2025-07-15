@@ -41,18 +41,7 @@ contract MeliesScript is Script {
         meliesToken = new Melies(defaultAdmin);
         console.log("Melies token deployed at:", address(meliesToken));
 
-        // Deploy MeliesICO
-        meliesICO = new MeliesICO(
-            address(meliesToken),
-            USDC_TOKEN,
-            USDT_TOKEN,
-            UNISWAP_ROUTER,
-            CHAINLINK_AGGREGATOR,
-            initialTgeTimestamp
-        );
-        console.log("MeliesICO deployed at:", address(meliesICO));
-
-        // Deploy TokenDistributor
+        // Deploy TokenDistributor first
         tokenDistributor = new MeliesTokenDistributor(
             address(meliesToken),
             initialTgeTimestamp,
@@ -65,6 +54,18 @@ contract MeliesScript is Script {
             AI_SYSTEMS_ADDRESS
         );
         console.log("TokenDistributor deployed at:", address(tokenDistributor));
+
+        // Deploy MeliesICO with tokenDistributor address
+        meliesICO = new MeliesICO(
+            address(meliesToken),
+            address(tokenDistributor),
+            USDC_TOKEN,
+            USDT_TOKEN,
+            UNISWAP_ROUTER,
+            CHAINLINK_AGGREGATOR,
+            initialTgeTimestamp
+        );
+        console.log("MeliesICO deployed at:", address(meliesICO));
 
         // Deploy MeliesStaking
         meliesStaking = new MeliesStaking(
@@ -80,6 +81,16 @@ contract MeliesScript is Script {
             address(tokenDistributor)
         );
         console.log("MINTER_ROLE granted to MeliesICO and TokenDistributor");
+
+        // Grant ICO_ROLE to ICO contract in TokenDistributor
+        tokenDistributor.grantRole(
+            tokenDistributor.ICO_ROLE(),
+            address(meliesICO)
+        );
+        console.log("ICO_ROLE granted to MeliesICO in TokenDistributor");
+
+        // Alternative: ICO can grant role to itself (requires admin role in ICO)
+        // meliesICO.grantIcoRole();
 
         vm.stopBroadcast();
 

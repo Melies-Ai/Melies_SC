@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 import "../src/MeliesICO.sol";
 import "../src/interfaces/IMeliesICO.sol";
 import "../src/Melies.sol";
+import "../src/MeliesTokenDistributor.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/IAccessControl.sol";
 
@@ -15,6 +16,7 @@ import {MockChainlinkAggregator} from "../src/mock/MockChainlinkAggregator.sol";
 
 contract MeliesICOPurchasesTest is Test {
     MockMeliesICO public meliesICO;
+    MeliesTokenDistributor public tokenDistributor;
     Melies public meliesToken;
     uint256 public tgeTimestamp;
     MockERC20 public usdcToken;
@@ -57,9 +59,23 @@ contract MeliesICOPurchasesTest is Test {
         uniswapRouter = new MockUniswapV2Router02();
         ethUsdPriceFeed = new MockChainlinkAggregator();
 
-        // Deploy MeliesICO
+        // Deploy TokenDistributor first
+        tokenDistributor = new MeliesTokenDistributor(
+            address(meliesToken),
+            TGE_TIMESTAMP,
+            admin,
+            address(0x111), // Community
+            address(0x222), // Treasury
+            address(0x333), // Partners
+            address(0x444), // Team
+            address(0x555), // Liquidity
+            address(0x666) // AI Systems
+        );
+
+        // Deploy MeliesICO with real tokenDistributor
         meliesICO = new MockMeliesICO(
             address(meliesToken),
+            address(tokenDistributor),
             address(usdcToken),
             address(usdtToken),
             address(uniswapRouter),
@@ -82,8 +98,18 @@ contract MeliesICOPurchasesTest is Test {
             INITIAL_ETH_PRICE
         );
 
-        // Grant MINTER_ROLE to ICO contract
+        // Grant MINTER_ROLE to contracts
         meliesToken.grantRole(meliesToken.MINTER_ROLE(), address(meliesICO));
+        meliesToken.grantRole(
+            meliesToken.MINTER_ROLE(),
+            address(tokenDistributor)
+        );
+
+        // Grant ICO_ROLE to ICO contract in TokenDistributor
+        tokenDistributor.grantRole(
+            tokenDistributor.ICO_ROLE(),
+            address(meliesICO)
+        );
     }
 
     // 1. Contract Deployment and Initialization
@@ -115,12 +141,13 @@ contract MeliesICOPurchasesTest is Test {
         vm.prank(user1);
         meliesICO.buyWithEth{value: 1 ether}();
 
-        // Check user's allocation
+        // Check user's allocation in ICO (USD tracking for refunds)
         IMeliesICO.Allocation memory allocation = meliesICO
             .getAllocationDetails(user1, 0);
-        assertEq(allocation.totalTokenAmount, 20_000e8); // 2000 USDC / 0.1 USDC per token = 20000 tokens
         assertEq(allocation.totalUsdcAmount, 2000e6); // 2000 USDC
-        assertEq(allocation.claimedAmount, 0);
+
+        // Check user's token allocation in TokenDistributor
+        assertTokenAllocation(user1, 20_000e8, "Seed"); // 2000 USDC / 0.1 USDC per token = 20000 tokens
     }
 
     function test_BuyWithEthExactMinimumPurchase() public {
@@ -132,12 +159,13 @@ contract MeliesICOPurchasesTest is Test {
         vm.prank(user1);
         meliesICO.buyWithEth{value: 0.05 ether}();
 
-        // Check user's allocation
+        // Check user's allocation in ICO (USD tracking for refunds)
         IMeliesICO.Allocation memory allocation = meliesICO
             .getAllocationDetails(user1, 0);
-        assertEq(allocation.totalTokenAmount, 1000e8); // 100 USDC / 0.1 USDC per token = 1000 tokens
         assertEq(allocation.totalUsdcAmount, 100e6); // 100 USDC
-        assertEq(allocation.claimedAmount, 0);
+
+        // Check user's token allocation in TokenDistributor
+        assertTokenAllocation(user1, 1000e8, "Seed"); // 100 USDC / 0.1 USDC per token = 1000 tokens
     }
 
     function test_BuyWithEthExactMaximumPurchase() public {
@@ -149,12 +177,13 @@ contract MeliesICOPurchasesTest is Test {
         vm.prank(user1);
         meliesICO.buyWithEth{value: 5 ether}();
 
-        // Check user's allocation
+        // Check user's allocation in ICO (USD tracking for refunds)
         IMeliesICO.Allocation memory allocation = meliesICO
             .getAllocationDetails(user1, 0);
-        assertEq(allocation.totalTokenAmount, 100_000e8); // 10,000 USDC / 0.1 USDC per token = 100,000 tokens
         assertEq(allocation.totalUsdcAmount, 10_000e6); // 10,000 USDC
-        assertEq(allocation.claimedAmount, 0);
+
+        // Check user's token allocation in TokenDistributor
+        assertTokenAllocation(user1, 100_000e8, "Seed"); // 10,000 USDC / 0.1 USDC per token = 100,000 tokens
     }
 
     function test_BuyWithEthExceedingRoundCap() public {
@@ -244,11 +273,13 @@ contract MeliesICOPurchasesTest is Test {
         meliesICO.buyWithEth{value: 0.5 ether}();
         vm.stopPrank();
 
-        // Check user's allocation
+        // Check user's allocation in ICO (USD tracking for refunds)
         IMeliesICO.Allocation memory allocation = meliesICO
             .getAllocationDetails(user1, 0);
-        assertEq(allocation.totalTokenAmount, 20_000e8); // 2000 USDC / 0.1 USDC per token = 20000 tokens
         assertEq(allocation.totalUsdcAmount, 2000e6); // 2000 USDC
+
+        // Check user's token allocation in TokenDistributor
+        assertTokenAllocation(user1, 20_000e8, "Seed"); // 2000 USDC / 0.1 USDC per token = 20000 tokens
     }
 
     function test_BuyWithEthMultipleRounds() public {
@@ -275,17 +306,18 @@ contract MeliesICOPurchasesTest is Test {
         vm.prank(user1);
         meliesICO.buyWithEth{value: 0.5 ether}();
 
-        // Check user's allocation for both rounds
+        // Check user's allocation for both rounds in ICO (USD tracking)
         IMeliesICO.Allocation memory allocation1 = meliesICO
             .getAllocationDetails(user1, 0);
         IMeliesICO.Allocation memory allocation2 = meliesICO
             .getAllocationDetails(user1, 1);
 
-        assertEq(allocation1.totalTokenAmount, 10_000e8); // 1000 USDC / 0.1 USDC per token = 10000 tokens
         assertEq(allocation1.totalUsdcAmount, 1000e6); // 1000 USDC
-
-        assertEq(allocation2.totalTokenAmount, 5000e8); // 1000 USDC / 0.2 USDC per token = 5000 tokens
         assertEq(allocation2.totalUsdcAmount, 1000e6); // 1000 USDC
+
+        // Check user's token allocations in TokenDistributor
+        assertTokenAllocation(user1, 10_000e8, "Seed"); // 1000 USDC / 0.1 USDC per token = 10000 tokens
+        assertTokenAllocation(user1, 5000e8, "Private Sale"); // 1000 USDC / 0.2 USDC per token = 5000 tokens
     }
 
     function test_BuyWithEthAfterIcoEnded() public {
@@ -393,12 +425,13 @@ contract MeliesICOPurchasesTest is Test {
         vm.prank(user1);
         meliesICO.buyWithUsdc(1000e6);
 
-        // Check user's allocation
+        // Check user's allocation in ICO (USD tracking for refunds)
         IMeliesICO.Allocation memory allocation = meliesICO
             .getAllocationDetails(user1, 0);
-        assertEq(allocation.totalTokenAmount, 10_000e8); // 1000 USDC / 0.1 USDC per token = 10000 tokens
         assertEq(allocation.totalUsdcAmount, 1000e6); // 1000 USDC
-        assertEq(allocation.claimedAmount, 0);
+
+        // Check user's token allocation in TokenDistributor
+        assertTokenAllocation(user1, 10_000e8, "Seed"); // 1000 USDC / 0.1 USDC per token = 10000 tokens
     }
 
     function test_BuyWithUsdcExactMinimumPurchase() public {
@@ -416,12 +449,13 @@ contract MeliesICOPurchasesTest is Test {
         vm.prank(user1);
         meliesICO.buyWithUsdc(100e6);
 
-        // Check user's allocation
+        // Check user's allocation in ICO (USD tracking for refunds)
         IMeliesICO.Allocation memory allocation = meliesICO
             .getAllocationDetails(user1, 0);
-        assertEq(allocation.totalTokenAmount, 1000e8); // 100 USDC / 0.1 USDC per token = 1000 tokens
         assertEq(allocation.totalUsdcAmount, 100e6); // 100 USDC
-        assertEq(allocation.claimedAmount, 0);
+
+        // Check user's token allocation in TokenDistributor
+        assertTokenAllocation(user1, 1000e8, "Seed"); // 100 USDC / 0.1 USDC per token = 1000 tokens
     }
 
     function test_BuyWithUsdcExactMaximumPurchase() public {
@@ -439,12 +473,13 @@ contract MeliesICOPurchasesTest is Test {
         vm.prank(user1);
         meliesICO.buyWithUsdc(10_000e6);
 
-        // Check user's allocation
+        // Check user's allocation in ICO (USD tracking for refunds)
         IMeliesICO.Allocation memory allocation = meliesICO
             .getAllocationDetails(user1, 0);
-        assertEq(allocation.totalTokenAmount, 100_000e8); // 10,000 USDC / 0.1 USDC per token = 100,000 tokens
         assertEq(allocation.totalUsdcAmount, 10_000e6); // 10,000 USDC
-        assertEq(allocation.claimedAmount, 0);
+
+        // Check user's token allocation in TokenDistributor
+        assertTokenAllocation(user1, 100_000e8, "Seed"); // 10,000 USDC / 0.1 USDC per token = 100,000 tokens
     }
 
     function test_BuyWithUsdcBelowMinimum() public {
@@ -561,11 +596,13 @@ contract MeliesICOPurchasesTest is Test {
         meliesICO.buyWithUsdc(1000e6);
         vm.stopPrank();
 
-        // Check user's allocation
+        // Check user's allocation in ICO (USD tracking for refunds)
         IMeliesICO.Allocation memory allocation = meliesICO
             .getAllocationDetails(user1, 0);
-        assertEq(allocation.totalTokenAmount, 20000e8); // 2000 USDC / 0.1 USDC per token = 20000 tokens
         assertEq(allocation.totalUsdcAmount, 2000e6); // 2000 USDC
+
+        // Check user's token allocation in TokenDistributor
+        assertTokenAllocation(user1, 20000e8, "Seed"); // 2000 USDC / 0.1 USDC per token = 20000 tokens
     }
 
     function test_BuyWithUsdcMultipleRounds() public {
@@ -598,17 +635,18 @@ contract MeliesICOPurchasesTest is Test {
         vm.prank(user1);
         meliesICO.buyWithUsdc(1000e6);
 
-        // Check user's allocation for both rounds
+        // Check user's allocation for both rounds in ICO (USD tracking)
         IMeliesICO.Allocation memory allocation1 = meliesICO
             .getAllocationDetails(user1, 0);
         IMeliesICO.Allocation memory allocation2 = meliesICO
             .getAllocationDetails(user1, 1);
 
-        assertEq(allocation1.totalTokenAmount, 10000e8); // 1000 USDC / 0.1 USDC per token = 10000 tokens
         assertEq(allocation1.totalUsdcAmount, 1000e6); // 1000 USDC
-
-        assertEq(allocation2.totalTokenAmount, 5000e8); // 1000 USDC / 0.2 USDC per token = 5000 tokens
         assertEq(allocation2.totalUsdcAmount, 1000e6); // 1000 USDC
+
+        // Check user's token allocations in TokenDistributor
+        assertTokenAllocation(user1, 10000e8, "Seed"); // 1000 USDC / 0.1 USDC per token = 10000 tokens
+        assertTokenAllocation(user1, 5000e8, "Private Sale"); // 1000 USDC / 0.2 USDC per token = 5000 tokens
     }
 
     function test_BuyWithUsdcAfterIcoEnded() public {
@@ -688,12 +726,13 @@ contract MeliesICOPurchasesTest is Test {
         vm.prank(user1);
         meliesICO.buyWithUsdt(1000e6);
 
-        // Check user's allocation
+        // Check user's allocation in ICO (USD tracking for refunds)
         IMeliesICO.Allocation memory allocation = meliesICO
             .getAllocationDetails(user1, 0);
-        assertEq(allocation.totalTokenAmount, 10_000e8); // 1000 USDC / 0.1 USDC per token = 10000 tokens
-        assertEq(allocation.totalUsdtAmount, 1000e6); // 1000 USDC
-        assertEq(allocation.claimedAmount, 0);
+        assertEq(allocation.totalUsdtAmount, 1000e6); // 1000 USDT
+
+        // Check user's token allocation in TokenDistributor
+        assertTokenAllocation(user1, 10_000e8, "Seed"); // 1000 USDT / 0.1 USDT per token = 10000 tokens
     }
 
     function test_BuyWithUsdtExactMinimumPurchase() public {
@@ -711,12 +750,13 @@ contract MeliesICOPurchasesTest is Test {
         vm.prank(user1);
         meliesICO.buyWithUsdt(100e6);
 
-        // Check user's allocation
+        // Check user's allocation in ICO (USD tracking for refunds)
         IMeliesICO.Allocation memory allocation = meliesICO
             .getAllocationDetails(user1, 0);
-        assertEq(allocation.totalTokenAmount, 1000e8); // 100 USDT / 0.1 USDT per token = 1000 tokens
         assertEq(allocation.totalUsdtAmount, 100e6); // 100 USDT
-        assertEq(allocation.claimedAmount, 0);
+
+        // Check user's token allocation in TokenDistributor
+        assertTokenAllocation(user1, 1000e8, "Seed"); // 100 USDT / 0.1 USDT per token = 1000 tokens
     }
 
     function test_BuyWithUsdtExactMaximumPurchase() public {
@@ -734,12 +774,13 @@ contract MeliesICOPurchasesTest is Test {
         vm.prank(user1);
         meliesICO.buyWithUsdt(10_000e6);
 
-        // Check user's allocation
+        // Check user's allocation in ICO (USD tracking for refunds)
         IMeliesICO.Allocation memory allocation = meliesICO
             .getAllocationDetails(user1, 0);
-        assertEq(allocation.totalTokenAmount, 100_000e8); // 10,000 USDT / 0.1 USDT per token = 100,000 tokens
         assertEq(allocation.totalUsdtAmount, 10_000e6); // 10,000 USDT
-        assertEq(allocation.claimedAmount, 0);
+
+        // Check user's token allocation in TokenDistributor
+        assertTokenAllocation(user1, 100_000e8, "Seed"); // 10,000 USDT / 0.1 USDT per token = 100,000 tokens
     }
 
     function test_BuyWithUsdtBelowMinimum() public {
@@ -856,11 +897,13 @@ contract MeliesICOPurchasesTest is Test {
         meliesICO.buyWithUsdt(1000e6);
         vm.stopPrank();
 
-        // Check user's allocation
+        // Check user's allocation in ICO (USD tracking for refunds)
         IMeliesICO.Allocation memory allocation = meliesICO
             .getAllocationDetails(user1, 0);
-        assertEq(allocation.totalTokenAmount, 20000e8); // 2000 USDT / 0.1 USDT per token = 20000 tokens
         assertEq(allocation.totalUsdtAmount, 2000e6); // 2000 USDT
+
+        // Check user's token allocation in TokenDistributor
+        assertTokenAllocation(user1, 20000e8, "Seed"); // 2000 USDT / 0.1 USDT per token = 20000 tokens
     }
 
     function test_BuyWithUsdtMultipleRounds() public {
@@ -893,17 +936,18 @@ contract MeliesICOPurchasesTest is Test {
         vm.prank(user1);
         meliesICO.buyWithUsdt(1000e6);
 
-        // Check user's allocation for both rounds
+        // Check user's allocation for both rounds in ICO (USD tracking)
         IMeliesICO.Allocation memory allocation1 = meliesICO
             .getAllocationDetails(user1, 0);
         IMeliesICO.Allocation memory allocation2 = meliesICO
             .getAllocationDetails(user1, 1);
 
-        assertEq(allocation1.totalTokenAmount, 10000e8); // 1000 USDT / 0.1 USDT per token = 10000 tokens
         assertEq(allocation1.totalUsdtAmount, 1000e6); // 1000 USDT
-
-        assertEq(allocation2.totalTokenAmount, 5000e8); // 1000 USDT / 0.2 USDT per token = 5000 tokens
         assertEq(allocation2.totalUsdtAmount, 1000e6); // 1000 USDT
+
+        // Check user's token allocations in TokenDistributor
+        assertTokenAllocation(user1, 10000e8, "Seed"); // 1000 USDT / 0.1 USDT per token = 10000 tokens
+        assertTokenAllocation(user1, 5000e8, "Private Sale"); // 1000 USDT / 0.2 USDT per token = 5000 tokens
     }
 
     function test_BuyWithUsdtAfterIcoEnded() public {
@@ -973,11 +1017,13 @@ contract MeliesICOPurchasesTest is Test {
         vm.prank(admin);
         meliesICO.addFiatPurchase(user1, 1000e6);
 
+        // Check user's allocation in ICO (USD tracking for refunds)
         IMeliesICO.Allocation memory allocation = meliesICO
             .getAllocationDetails(user1, 0);
-        // 1000 usd / 0.1 price  = 10000 token
-        assertEq(allocation.totalTokenAmount, 10_000e8);
-        assertEq(allocation.totalUsdcAmount, 1000e6);
+        assertEq(allocation.totalUsdcAmount, 1000e6); // 1000 USD (fiat treated as USDC equivalent)
+
+        // Check user's token allocation in TokenDistributor
+        assertTokenAllocation(user1, 10_000e8, "Seed"); // 1000 USD / 0.1 USD per token = 10000 tokens
     }
 
     function test_FiatPurchaseExactMinimum() public {
@@ -986,10 +1032,13 @@ contract MeliesICOPurchasesTest is Test {
         vm.prank(admin);
         meliesICO.addFiatPurchase(user1, 100e6); // 100 USDC, exact minimum
 
+        // Check user's allocation in ICO (USD tracking for refunds)
         IMeliesICO.Allocation memory allocation = meliesICO
             .getAllocationDetails(user1, 0);
-        assertEq(allocation.totalTokenAmount, 1000e8); // 100 USDC / 0.1 USDC per token = 1000 tokens
-        assertEq(allocation.totalUsdcAmount, 100e6); // 100 USDC
+        assertEq(allocation.totalUsdcAmount, 100e6); // 100 USD (fiat treated as USDC equivalent)
+
+        // Check user's token allocation in TokenDistributor
+        assertTokenAllocation(user1, 1000e8, "Seed"); // 100 USD / 0.1 USD per token = 1000 tokens
     }
 
     function test_FiatPurchaseExactMaximum() public {
@@ -998,10 +1047,13 @@ contract MeliesICOPurchasesTest is Test {
         vm.prank(admin);
         meliesICO.addFiatPurchase(user1, 10_000e6); // 10,000 USDC, exact maximum
 
+        // Check user's allocation in ICO (USD tracking for refunds)
         IMeliesICO.Allocation memory allocation = meliesICO
             .getAllocationDetails(user1, 0);
-        assertEq(allocation.totalTokenAmount, 100_000e8); // 10,000 USDC / 0.1 USDC per token = 100,000 tokens
-        assertEq(allocation.totalUsdcAmount, 10_000e6); // 10,000 USDC
+        assertEq(allocation.totalUsdcAmount, 10_000e6); // 10,000 USD (fiat treated as USDC equivalent)
+
+        // Check user's token allocation in TokenDistributor
+        assertTokenAllocation(user1, 100_000e8, "Seed"); // 10,000 USD / 0.1 USD per token = 100,000 tokens
     }
 
     function test_FiatPurchaseBelowMinimum() public {
@@ -1028,10 +1080,13 @@ contract MeliesICOPurchasesTest is Test {
         meliesICO.addFiatPurchase(user1, 300e6); // 300 USDC
         vm.stopPrank();
 
+        // Check user's allocation in ICO (USD tracking for refunds)
         IMeliesICO.Allocation memory allocation = meliesICO
             .getAllocationDetails(user1, 0);
-        assertEq(allocation.totalTokenAmount, 8000e8); // 800 USDC / 0.1 USDC per token = 8000 tokens
-        assertEq(allocation.totalUsdcAmount, 800e6); // 800 USDC
+        assertEq(allocation.totalUsdcAmount, 800e6); // 800 USD (fiat treated as USDC equivalent)
+
+        // Check user's token allocation in TokenDistributor
+        assertTokenAllocation(user1, 8000e8, "Seed"); // 800 USD / 0.1 USD per token = 8000 tokens
     }
 
     function test_FiatPurchaseMultipleRounds() public {
@@ -1057,17 +1112,18 @@ contract MeliesICOPurchasesTest is Test {
         vm.prank(admin);
         meliesICO.addFiatPurchase(user1, 1000e6); // 1000 USDC equivalent
 
-        // Check user's allocation for both rounds
+        // Check user's allocation for both rounds in ICO (USD tracking)
         IMeliesICO.Allocation memory allocation1 = meliesICO
             .getAllocationDetails(user1, 0);
         IMeliesICO.Allocation memory allocation2 = meliesICO
             .getAllocationDetails(user1, 1);
 
-        assertEq(allocation1.totalTokenAmount, 10000e8); // 1000 USDC / 0.1 USDC per token = 10000 tokens
-        assertEq(allocation1.totalUsdcAmount, 1000e6); // 1000 USDC
+        assertEq(allocation1.totalUsdcAmount, 1000e6); // 1000 USD (fiat treated as USDC equivalent)
+        assertEq(allocation2.totalUsdcAmount, 1000e6); // 1000 USD (fiat treated as USDC equivalent)
 
-        assertEq(allocation2.totalTokenAmount, 5000e8); // 1000 USDC / 0.2 USDC per token = 5000 tokens
-        assertEq(allocation2.totalUsdcAmount, 1000e6); // 1000 USDC
+        // Check user's token allocations in TokenDistributor
+        assertTokenAllocation(user1, 10000e8, "Seed"); // 1000 USD / 0.1 USD per token = 10000 tokens
+        assertTokenAllocation(user1, 5000e8, "Private Sale"); // 1000 USD / 0.2 USD per token = 5000 tokens
     }
 
     function test_FiatPurchaseExceedingRoundCap() public {
@@ -1140,10 +1196,13 @@ contract MeliesICOPurchasesTest is Test {
         vm.prank(admin);
         meliesICO.addFiatPurchase(user2, 100e6); // 100 USDC, filling the cap
 
+        // Check user's allocation in ICO (USD tracking for refunds)
         IMeliesICO.Allocation memory allocation = meliesICO
             .getAllocationDetails(user2, 0);
-        assertEq(allocation.totalTokenAmount, 1000e8); // 100 USDC / 0.1 USDC per token = 1000 tokens
-        assertEq(allocation.totalUsdcAmount, 100e6); // 100 USDC
+        assertEq(allocation.totalUsdcAmount, 100e6); // 100 USD (fiat treated as USDC equivalent)
+
+        // Check user's token allocation in TokenDistributor
+        assertTokenAllocation(user2, 1000e8, "Seed"); // 100 USD / 0.1 USD per token = 1000 tokens
     }
 
     function test_FiatPurchaseAfterIcoEnded() public {
@@ -1306,5 +1365,61 @@ contract MeliesICOPurchasesTest is Test {
 
     function setupTgeTimestamp(uint newTgeTimestamp) internal {
         meliesICO.setTgeTimestamp(newTgeTimestamp);
+    }
+
+    /**
+     * @dev Helper function to get user's token allocation from TokenDistributor
+     * @param user Address of the user
+     * @param roundName Expected round name ("Seed", "Private Sale", "Public Sale")
+     * @return totalAmount Total tokens allocated
+     * @return claimedAmount Tokens already claimed
+     */
+    function getUserTokenAllocation(
+        address user,
+        string memory roundName
+    ) internal view returns (uint256 totalAmount, uint256 claimedAmount) {
+        uint256[] memory allocIndices = tokenDistributor
+            .getAllocationsForBeneficiary(user);
+
+        for (uint256 i = 0; i < allocIndices.length; i++) {
+            (, , , , , string memory allocName, , , ) = tokenDistributor
+                .allocations(allocIndices[i]);
+            if (keccak256(bytes(allocName)) == keccak256(bytes(roundName))) {
+                (totalAmount, claimedAmount, , , , , , , ) = tokenDistributor
+                    .allocations(allocIndices[i]);
+                return (totalAmount, claimedAmount);
+            }
+        }
+
+        // If not found, return zeros
+        return (0, 0);
+    }
+
+    /**
+     * @dev Helper function to assert token allocation amounts
+     * @param user Address of the user
+     * @param expectedTokens Expected token amount
+     * @param roundName Round name to look for
+     */
+    function assertTokenAllocation(
+        address user,
+        uint256 expectedTokens,
+        string memory roundName
+    ) internal {
+        (uint256 totalAmount, uint256 claimedAmount) = getUserTokenAllocation(
+            user,
+            roundName
+        );
+        assertEq(
+            totalAmount,
+            expectedTokens,
+            string(
+                abi.encodePacked(
+                    "Should have correct tokens allocated for ",
+                    roundName
+                )
+            )
+        );
+        assertEq(claimedAmount, 0, "Should have 0 tokens claimed initially");
     }
 }

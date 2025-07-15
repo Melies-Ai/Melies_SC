@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 import "../src/MeliesICO.sol";
 import "../src/Melies.sol";
+import "../src/MeliesTokenDistributor.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {MockMeliesICO} from "../src/mock/MockMelies.sol";
 import {MockERC20} from "../src/mock/MockERC20.sol";
@@ -12,6 +13,7 @@ import {MockChainlinkAggregator} from "../src/mock/MockChainlinkAggregator.sol";
 
 contract MeliesICOWhitelistTest is Test {
     MockMeliesICO public meliesICO;
+    MeliesTokenDistributor public tokenDistributor;
     Melies public meliesToken;
     MockERC20 public usdcToken;
     MockERC20 public usdtToken;
@@ -40,13 +42,37 @@ contract MeliesICOWhitelistTest is Test {
         uniswapRouter = new MockUniswapV2Router02();
         ethUsdPriceFeed = new MockChainlinkAggregator();
 
+        // Deploy TokenDistributor first
+        tokenDistributor = new MeliesTokenDistributor(
+            address(meliesToken),
+            block.timestamp + 1 days,
+            admin,
+            address(0x111), // Community
+            address(0x222), // Treasury
+            address(0x333), // Partners
+            address(0x444), // Team
+            address(0x555), // Liquidity
+            address(0x666) // AI Systems
+        );
+
         meliesICO = new MockMeliesICO(
             address(meliesToken),
+            address(tokenDistributor),
             address(usdcToken),
             address(usdtToken),
             address(uniswapRouter),
             address(ethUsdPriceFeed),
             block.timestamp + 1 days
+        );
+
+        // Grant roles
+        meliesToken.grantRole(
+            meliesToken.MINTER_ROLE(),
+            address(tokenDistributor)
+        );
+        tokenDistributor.grantRole(
+            tokenDistributor.ICO_ROLE(),
+            address(meliesICO)
         );
 
         // Set up initial ETH price
@@ -106,9 +132,19 @@ contract MeliesICOWhitelistTest is Test {
         meliesICO.buyWithUsdc(1000e6);
         vm.stopPrank();
 
+        // Check user's allocation in ICO (USD tracking for refunds)
         IMeliesICO.Allocation memory allocation = meliesICO
             .getAllocationDetails(user1, 0);
-        assertEq(allocation.totalTokenAmount, 10_000e8);
+        assertEq(allocation.totalUsdcAmount, 1000e6); // 1000 USDC
+
+        // Check user's token allocation in TokenDistributor
+        uint256[] memory allocIndices = tokenDistributor
+            .getAllocationsForBeneficiary(user1);
+        assertEq(allocIndices.length, 1, "Should have one allocation");
+        (uint256 totalAmount, , , , , , , , ) = tokenDistributor.allocations(
+            allocIndices[0]
+        );
+        assertEq(totalAmount, 10_000e8, "Should have 10,000 tokens allocated");
     }
 
     function test_BuyTokensWhenNotWhitelisted() public {
@@ -167,12 +203,27 @@ contract MeliesICOWhitelistTest is Test {
         meliesICO.buyWithUsdc(1000e6);
         vm.stopPrank();
 
+        // Check USD allocations in ICO
         IMeliesICO.Allocation memory allocation1 = meliesICO
             .getAllocationDetails(user1, 0);
         IMeliesICO.Allocation memory allocation2 = meliesICO
             .getAllocationDetails(user2, 1);
-        assertEq(allocation1.totalTokenAmount, 10000e8);
-        assertEq(allocation2.totalTokenAmount, 5000e8);
+        assertEq(allocation1.totalUsdcAmount, 1000e6);
+        assertEq(allocation2.totalUsdcAmount, 1000e6);
+
+        // Check token allocations in TokenDistributor
+        uint256[] memory allocIndices1 = tokenDistributor
+            .getAllocationsForBeneficiary(user1);
+        uint256[] memory allocIndices2 = tokenDistributor
+            .getAllocationsForBeneficiary(user2);
+        (uint256 totalAmount1, , , , , , , , ) = tokenDistributor.allocations(
+            allocIndices1[0]
+        );
+        (uint256 totalAmount2, , , , , , , , ) = tokenDistributor.allocations(
+            allocIndices2[0]
+        );
+        assertEq(totalAmount1, 10000e8); // Round 0: 1000 USDC / 0.1 = 10000 tokens
+        assertEq(totalAmount2, 5000e8); // Round 1: 1000 USDC / 0.2 = 5000 tokens
     }
 
     function test_OnlyAdminCanAddToWhitelist() public {
@@ -237,9 +288,14 @@ contract MeliesICOWhitelistTest is Test {
         vm.prank(user1);
         meliesICO.buyWithEth{value: 1 ether}();
 
-        IMeliesICO.Allocation memory allocation = meliesICO
-            .getAllocationDetails(user1, 0);
-        assertGt(allocation.totalTokenAmount, 0);
+        // Check that user has token allocation in TokenDistributor
+        uint256[] memory allocIndices = tokenDistributor
+            .getAllocationsForBeneficiary(user1);
+        assertEq(allocIndices.length, 1, "Should have one allocation");
+        (uint256 totalAmount, , , , , , , , ) = tokenDistributor.allocations(
+            allocIndices[0]
+        );
+        assertGt(totalAmount, 0, "Should have tokens allocated");
     }
 
     function test_WhitelistWithFiatPurchase() public {
@@ -251,9 +307,19 @@ contract MeliesICOWhitelistTest is Test {
         meliesICO.addFiatPurchase(user1, 1000e6);
         vm.stopPrank();
 
+        // Check user's allocation in ICO (USD tracking for refunds)
         IMeliesICO.Allocation memory allocation = meliesICO
             .getAllocationDetails(user1, 0);
-        assertEq(allocation.totalTokenAmount, 10000e8);
+        assertEq(allocation.totalUsdcAmount, 1000e6); // 1000 USD (fiat treated as USDC equivalent)
+
+        // Check user's token allocation in TokenDistributor
+        uint256[] memory allocIndices = tokenDistributor
+            .getAllocationsForBeneficiary(user1);
+        assertEq(allocIndices.length, 1, "Should have one allocation");
+        (uint256 totalAmount, , , , , , , , ) = tokenDistributor.allocations(
+            allocIndices[0]
+        );
+        assertEq(totalAmount, 10000e8, "Should have 10,000 tokens allocated");
     }
 
     function test_GasUsageForAddingToWhitelist() public {

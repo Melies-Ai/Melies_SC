@@ -60,6 +60,7 @@ contract MeliesICOSaleRoundTest is Test {
         // Deploy MeliesICO
         meliesICO = new MockMeliesICO(
             address(meliesToken),
+            address(0x1234), // Temporary tokenDistributor address
             address(usdcToken),
             address(usdtToken),
             address(uniswapRouter),

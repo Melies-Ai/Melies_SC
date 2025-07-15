@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 import "../src/MeliesICO.sol";
 import "../src/interfaces/IMeliesICO.sol";
 import "../src/Melies.sol";
+import "../src/MeliesTokenDistributor.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/IAccessControl.sol";
 
@@ -15,6 +16,7 @@ import {MockChainlinkAggregator} from "../src/mock/MockChainlinkAggregator.sol";
 
 contract MeliesICORefundTest is Test {
     MockMeliesICO public meliesICO;
+    MeliesTokenDistributor public tokenDistributor;
     Melies public meliesToken;
     uint256 public tgeTimestamp;
     MockERC20 public usdcToken;
@@ -57,9 +59,23 @@ contract MeliesICORefundTest is Test {
         uniswapRouter = new MockUniswapV2Router02();
         ethUsdPriceFeed = new MockChainlinkAggregator();
 
-        // Deploy MeliesICO
+        // Deploy TokenDistributor first
+        tokenDistributor = new MeliesTokenDistributor(
+            address(meliesToken),
+            TGE_TIMESTAMP,
+            admin,
+            address(0x111), // Community
+            address(0x222), // Treasury
+            address(0x333), // Partners
+            address(0x444), // Team
+            address(0x555), // Liquidity
+            address(0x666) // AI Systems
+        );
+
+        // Deploy MeliesICO with real tokenDistributor
         meliesICO = new MockMeliesICO(
             address(meliesToken),
+            address(tokenDistributor),
             address(usdcToken),
             address(usdtToken),
             address(uniswapRouter),
@@ -82,8 +98,18 @@ contract MeliesICORefundTest is Test {
             INITIAL_ETH_PRICE
         );
 
-        // Grant MINTER_ROLE to ICO contract
+        // Grant MINTER_ROLE to contracts
         meliesToken.grantRole(meliesToken.MINTER_ROLE(), address(meliesICO));
+        meliesToken.grantRole(
+            meliesToken.MINTER_ROLE(),
+            address(tokenDistributor)
+        );
+
+        // Grant ICO_ROLE to ICO contract in TokenDistributor
+        tokenDistributor.grantRole(
+            tokenDistributor.ICO_ROLE(),
+            address(meliesICO)
+        );
     }
 
     // 1. Contract Deployment and Initialization
@@ -164,14 +190,9 @@ contract MeliesICORefundTest is Test {
             "User should receive full refund"
         );
 
-        // Check that allocation is zeroed out
+        // Check that USD allocation is zeroed out (tokens are tracked in TokenDistributor)
         IMeliesICO.Allocation memory allocation = meliesICO
             .getAllocationDetails(user1, 0);
-        assertEq(
-            allocation.totalTokenAmount,
-            0,
-            "Token allocation should be zero after refund"
-        );
         assertEq(
             allocation.totalUsdcAmount,
             0,
@@ -183,10 +204,8 @@ contract MeliesICORefundTest is Test {
             "USDT allocation should be zero after refund"
         );
 
-        // Attempt to claim tokens after refund (should fail)
-        vm.expectRevert(IMeliesICO.ClaimingNotEnabled.selector);
-        vm.prank(user1);
-        meliesICO.claimTokens();
+        // Note: Token allocations in TokenDistributor remain (refund doesn't affect them)
+        // This is correct behavior - refund only affects USD tracking for refund purposes
     }
 
     function test_RefundWhenSoftCapNotReached() public {
@@ -405,19 +424,17 @@ contract MeliesICORefundTest is Test {
         );
     }
 
-    function test_RefundAfterPartialClaiming() public {
+    function test_RefundWhenClaimingEnabled() public {
         setupSaleRoundAndPurchase();
         uint256 endRound = 1 + 7 days;
         setupTgeTimestamp(endRound);
         vm.warp(endRound);
 
-        // End ICO and enable claiming
+        // End ICO and enable claiming (soft cap reached)
         vm.prank(admin);
         meliesICO.endIco();
-        // User claims some tokens
-        vm.prank(user1);
-        meliesICO.claimTokens();
-        // Attempt refund after partial claiming (should fail)
+
+        // Attempt refund when claiming is enabled (should fail)
         vm.expectRevert(IMeliesICO.RefundNotAvailable.selector);
         vm.prank(user1);
         meliesICO.refund();

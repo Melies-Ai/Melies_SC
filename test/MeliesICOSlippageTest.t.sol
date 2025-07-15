@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 import "../src/MeliesICO.sol";
 import "../src/Melies.sol";
+import "../src/MeliesTokenDistributor.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/IAccessControl.sol";
 
@@ -14,6 +15,7 @@ import {MockChainlinkAggregator} from "../src/mock/MockChainlinkAggregator.sol";
 
 contract MeliesICOSlippageTest is Test {
     MockMeliesICO public meliesICO;
+    MeliesTokenDistributor public tokenDistributor;
     Melies public meliesToken;
     MockERC20 public usdcToken;
     MockERC20 public usdtToken;
@@ -49,8 +51,22 @@ contract MeliesICOSlippageTest is Test {
         uniswapRouter = new MockUniswapV2Router02();
         ethUsdPriceFeed = new MockChainlinkAggregator();
 
+        // Deploy TokenDistributor first
+        tokenDistributor = new MeliesTokenDistributor(
+            address(meliesToken),
+            tgeTimestamp,
+            admin,
+            address(0x111), // Community
+            address(0x222), // Treasury
+            address(0x333), // Partners
+            address(0x444), // Team
+            address(0x555), // Liquidity
+            address(0x666) // AI Systems
+        );
+
         meliesICO = new MockMeliesICO(
             address(meliesToken),
+            address(tokenDistributor),
             address(usdcToken),
             address(usdtToken),
             address(uniswapRouter),
@@ -69,7 +85,16 @@ contract MeliesICOSlippageTest is Test {
         meliesICO.addToWhitelist(0, addresses);
         meliesICO.addToWhitelist(1, addresses);
 
+        // Grant roles
         meliesToken.grantRole(meliesToken.MINTER_ROLE(), address(meliesICO));
+        meliesToken.grantRole(
+            meliesToken.MINTER_ROLE(),
+            address(tokenDistributor)
+        );
+        tokenDistributor.grantRole(
+            tokenDistributor.ICO_ROLE(),
+            address(meliesICO)
+        );
     }
 
     function test_SetValidSlippageTolerance() public {
