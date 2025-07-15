@@ -20,7 +20,6 @@ contract MeliesTest is Test {
     address public user;
     address public user2;
     address public user3;
-    address public daoAdmin;
 
     // Custom error selectors
     bytes4 private constant UNAUTHORIZED_SELECTOR =
@@ -42,7 +41,6 @@ contract MeliesTest is Test {
         user = address(0x4);
         user2 = address(0x5);
         user3 = address(0x6);
-        daoAdmin = address(0x7);
 
         tgeTimestamp = block.timestamp + 21 days;
 
@@ -52,7 +50,6 @@ contract MeliesTest is Test {
         meliesToken.grantRole(meliesToken.PAUSER_ROLE(), pauser);
         meliesToken.grantRole(meliesToken.MINTER_ROLE(), minter);
         meliesToken.grantRole(meliesToken.BURNER_ROLE(), burner);
-        meliesToken.grantRole(meliesToken.DAO_ADMIN_ROLE(), daoAdmin);
         vm.stopPrank();
     }
 
@@ -438,7 +435,7 @@ contract MeliesTest is Test {
     function test_SetMaxTotalSupply() public {
         uint256 newMaxSupply = 1_500_000_000e8; // 1.5B tokens
 
-        vm.prank(daoAdmin);
+        vm.prank(admin);
         meliesToken.setMaxTotalSupply(newMaxSupply);
 
         assertEq(meliesToken.maxTotalSupply(), newMaxSupply);
@@ -448,7 +445,7 @@ contract MeliesTest is Test {
     function test_SetMaxTotalSupplyBelowMinimum() public {
         uint256 newMaxSupply = 150_000_000e8; // Below MIN_MAX_TOTAL_SUPPLY
 
-        vm.prank(daoAdmin);
+        vm.prank(admin);
         vm.expectRevert(
             abi.encodeWithSelector(
                 Melies.InvalidMaxTotalSupply.selector,
@@ -461,7 +458,7 @@ contract MeliesTest is Test {
 
     /// @notice Test setting max total supply below current total supply
     function test_SetMaxTotalSupplyBelowCurrentSupply() public {
-        vm.prank(daoAdmin);
+        vm.prank(admin);
         meliesToken.setMaxTotalSupply(1_500_000_000e8); // 1.5B tokens
 
         uint256 initialMint = 1_200_000_000e8; // 1.2B tokens
@@ -470,7 +467,7 @@ contract MeliesTest is Test {
 
         uint256 newMaxSupply = 1_100_000_000e8; // 1.1B tokens - below current total supply
 
-        vm.prank(daoAdmin);
+        vm.prank(admin);
         vm.expectRevert(
             abi.encodeWithSelector(
                 Melies.InvalidMaxTotalSupply.selector,
@@ -489,7 +486,7 @@ contract MeliesTest is Test {
             abi.encodeWithSelector(
                 UNAUTHORIZED_SELECTOR,
                 user,
-                meliesToken.DAO_ADMIN_ROLE()
+                meliesToken.DEFAULT_ADMIN_ROLE()
             )
         );
         vm.prank(user);

@@ -49,6 +49,8 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
     error CanOnlyToggleForNoLockStaking();
     error InvalidMultiplier();
     error DailyBudgetMustBeGreaterThanZero();
+    error EarlyUnstakingNotAllowed();
+    error CannotEarlyUnstakeNoLockStaking();
 
     Melies public meliesToken;
 
@@ -80,6 +82,14 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
     event Staked(address indexed user, uint256 amount, uint8 durationIndex);
     event Unstaked(address indexed user, uint256 amount, uint256 rewards);
     event RewardsClaimed(address indexed user, uint256 amount);
+    event EarlyUnstaked(
+        address indexed user,
+        uint256 amount,
+        uint256 rewards,
+        uint256 burnAmount,
+        uint8 durationIndex,
+        uint256 monthsElapsed
+    );
 
     /**
      * @dev Constructor to initialize the MeliesStaking contract
@@ -91,6 +101,14 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
         tgeTimestamp = _tgeTimestamp;
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(ADMIN_ROLE, msg.sender);
+    }
+
+    /**
+     * @dev Grants BURNER_ROLE to this contract for early unstaking burns
+     * Must be called by an admin after deployment
+     */
+    function initializeBurnerRole() external onlyRole(ADMIN_ROLE) {
+        meliesToken.grantRole(meliesToken.BURNER_ROLE(), address(this));
     }
 
     /**
@@ -149,13 +167,6 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
         if (userStakes[msg.sender].length == 1) {
             stakers.push(msg.sender);
         }
-
-        // Update voting power
-        meliesToken.updateVotingPowerOnStaking(
-            address(this),
-            msg.sender,
-            _amount
-        );
 
         emit Staked(msg.sender, _amount, _durationIndex);
     }
@@ -253,17 +264,149 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
             ) revert Minimum5000MELStakeRequired();
         }
 
-        // Update voting power
-        meliesToken.updateVotingPowerOnStaking(
-            msg.sender,
-            address(this),
-            amountWithPrecision / 10 ** PRECISION_FACTOR
-        );
-
         emit Unstaked(
             msg.sender,
             amountWithPrecision / 10 ** PRECISION_FACTOR,
             rewardsWithPrecision / 10 ** PRECISION_FACTOR
+        );
+    }
+
+    /**
+     * @dev Allows users to unstake their tokens early with burn penalty
+     * @param _stakeIndex Index of the stake to unstake
+     * @param _ponderatedAmountWithPrecision Amount to unstake with precision
+     * Requirements:
+     * - Cannot be used for no-lock staking (index 0)
+     * - Must be before the lock period ends
+     * - Burn percentage is applied based on staking program and elapsed time
+     */
+    function earlyUnstake(
+        uint256 _stakeIndex,
+        uint256 _ponderatedAmountWithPrecision
+    ) external nonReentrant {
+        if (isRewardUpdating) revert RewardsBeingUpdated();
+        if (_stakeIndex >= userStakes[msg.sender].length)
+            revert InvalidStakeIndex();
+
+        StakingInfo storage userStake = userStakes[msg.sender][_stakeIndex];
+
+        // Cannot early unstake no-lock staking
+        if (userStake.durationIndex == 0)
+            revert CannotEarlyUnstakeNoLockStaking();
+
+        // Must be before the lock period ends
+        if (block.timestamp >= userStake.endTime)
+            revert EarlyUnstakingNotAllowed();
+
+        if (
+            _ponderatedAmountWithPrecision >
+            userStake.ponderatedAmountWithPrecision
+        ) {
+            revert AmountGreaterThanPonderatedStakeAmount();
+        }
+
+        // Calculate elapsed months and burn percentage
+        uint256 monthsElapsed = calculateElapsedMonths(userStake.startTime);
+        uint256 burnPercentage = calculateEarlyUnstakingBurnPercentage(
+            userStake.durationIndex,
+            monthsElapsed
+        );
+
+        uint256 rewardsWithPrecision = userStake
+            .accumulatedRewardsWithPrecision;
+        uint256 amountWithPrecision = (_ponderatedAmountWithPrecision *
+            (10 ** DURATION_MULTIPLIER_PRECISION)) /
+            DURATION_MULTIPLIERS[userStake.durationIndex];
+
+        // Calculate total amount (principal + rewards)
+        uint256 totalAmountWithPrecision = amountWithPrecision +
+            rewardsWithPrecision;
+
+        // Calculate burn amount
+        uint256 burnAmountWithPrecision = (totalAmountWithPrecision *
+            burnPercentage) / 10000;
+        uint256 netAmountWithPrecision = totalAmountWithPrecision -
+            burnAmountWithPrecision;
+
+        // Update stake balances
+        if (userStake.amountWithPrecision < amountWithPrecision) {
+            if (
+                (amountWithPrecision - userStake.amountWithPrecision) <
+                (10 ** PRECISION_FACTOR)
+            ) {
+                totalStakedWithPrecision -= userStake.amountWithPrecision;
+                totalPonderatedStakedWithPrecision -= userStake
+                    .ponderatedAmountWithPrecision;
+                userStake.amountWithPrecision = 0;
+                userStake.ponderatedAmountWithPrecision = 0;
+            } else {
+                revert AmountGreaterThanPonderatedStakeAmount();
+            }
+        } else {
+            if (
+                (userStake.amountWithPrecision - amountWithPrecision) <
+                (10 ** PRECISION_FACTOR)
+            ) {
+                totalStakedWithPrecision -= userStake.amountWithPrecision;
+                totalPonderatedStakedWithPrecision -= userStake
+                    .ponderatedAmountWithPrecision;
+                userStake.amountWithPrecision = 0;
+                userStake.ponderatedAmountWithPrecision = 0;
+            } else {
+                totalStakedWithPrecision -= amountWithPrecision;
+                totalPonderatedStakedWithPrecision -= _ponderatedAmountWithPrecision;
+                userStake.amountWithPrecision -= amountWithPrecision;
+                userStake
+                    .ponderatedAmountWithPrecision -= _ponderatedAmountWithPrecision;
+            }
+        }
+        userStake.accumulatedRewardsWithPrecision = 0;
+
+        // Transfer net amount to user
+        uint256 netUnstakeAmount = netAmountWithPrecision /
+            (10 ** PRECISION_FACTOR);
+        uint256 burnAmount = burnAmountWithPrecision / (10 ** PRECISION_FACTOR);
+
+        meliesToken.safeTransfer(msg.sender, netUnstakeAmount);
+
+        // Burn the penalty amount
+        if (burnAmount > 0) {
+            meliesToken.burn(address(this), burnAmount);
+        }
+
+        // Remove stake if fully unstaked
+        if (
+            userStake.amountWithPrecision == 0 ||
+            userStake.ponderatedAmountWithPrecision == 0
+        ) {
+            userStake.amountWithPrecision = 0;
+            userStake.ponderatedAmountWithPrecision = 0;
+
+            // Remove the stake by swapping with the last element and popping
+            userStakes[msg.sender][_stakeIndex] = userStakes[msg.sender][
+                userStakes[msg.sender].length - 1
+            ];
+            userStakes[msg.sender].pop();
+        } else {
+            // Check minimum stake requirements for remaining amount
+            if (
+                userStake.amountWithPrecision <
+                MIN_STAKE_AMOUNT * 10 ** PRECISION_FACTOR
+            ) revert StakingAmountTooLow();
+
+            if (
+                userStake.durationIndex == 4 &&
+                userStake.amountWithPrecision < 5000e8 * 10 ** PRECISION_FACTOR
+            ) revert Minimum5000MELStakeRequired();
+        }
+
+        emit EarlyUnstaked(
+            msg.sender,
+            amountWithPrecision / 10 ** PRECISION_FACTOR,
+            rewardsWithPrecision / 10 ** PRECISION_FACTOR,
+            burnAmount,
+            userStake.durationIndex,
+            monthsElapsed
         );
     }
 
@@ -280,6 +423,92 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
         if (durationIndex == 2) return 180 days;
         if (durationIndex == 3 || durationIndex == 4) return 365 days;
         revert InvalidDurationIndex();
+    }
+
+    /**
+     * @dev Internal function to get the staking program name from duration index
+     * @param durationIndex Index representing the staking duration
+     * @return Program name as string
+     */
+    function getStakingProgramName(
+        uint8 durationIndex
+    ) internal pure returns (string memory) {
+        if (durationIndex == 0) return "NO_LOCK";
+        if (durationIndex == 1) return "LUNAR"; // 3 months / 90 days
+        if (durationIndex == 2) return "SOLAR"; // 6 months / 180 days
+        if (durationIndex == 3) return "PULSAR"; // 12 months / 365 days
+        if (durationIndex == 4) return "GENESIS"; // 12 months / 365 days
+        revert InvalidDurationIndex();
+    }
+
+    /**
+     * @dev Internal function to calculate burn percentage for early unstaking
+     * @param durationIndex Index representing the staking duration
+     * @param monthsElapsed Number of full months that have elapsed since staking
+     * @return burnPercentage Percentage to burn (0-9000 representing 0-90%)
+     */
+    function calculateEarlyUnstakingBurnPercentage(
+        uint8 durationIndex,
+        uint256 monthsElapsed
+    ) internal pure returns (uint256 burnPercentage) {
+        // No burn for no-lock staking (index 0)
+        if (durationIndex == 0) return 0;
+
+        // LUNAR (3 months lock-up) - index 1
+        if (durationIndex == 1) {
+            if (monthsElapsed == 0) return 9000; // 90%
+            if (monthsElapsed == 1) return 6000; // 60%
+            if (monthsElapsed == 2) return 3000; // 30%
+            return 0; // After 3 months, no burn
+        }
+
+        // SOLAR (6 months lock-up) - index 2
+        if (durationIndex == 2) {
+            if (monthsElapsed == 0) return 9000; // 90%
+            if (monthsElapsed == 1) return 7500; // 75%
+            if (monthsElapsed == 2) return 6000; // 60%
+            if (monthsElapsed == 3) return 4500; // 45%
+            if (monthsElapsed == 4) return 3000; // 30%
+            if (monthsElapsed == 5) return 1500; // 15%
+            return 0; // After 6 months, no burn
+        }
+
+        // PULSAR & GENESIS (12 months lock-up) - index 3 & 4
+        if (durationIndex == 3 || durationIndex == 4) {
+            if (monthsElapsed == 0) return 9000; // 90.0%
+            if (monthsElapsed == 1) return 8250; // 82.5%
+            if (monthsElapsed == 2) return 7500; // 75.0%
+            if (monthsElapsed == 3) return 6750; // 67.5%
+            if (monthsElapsed == 4) return 6000; // 60.0%
+            if (monthsElapsed == 5) return 5250; // 52.5%
+            if (monthsElapsed == 6) return 4500; // 45.0%
+            if (monthsElapsed == 7) return 3750; // 37.5%
+            if (monthsElapsed == 8) return 3000; // 30.0%
+            if (monthsElapsed == 9) return 2250; // 22.5%
+            if (monthsElapsed == 10) return 1500; // 15.0%
+            if (monthsElapsed == 11) return 750; // 7.5%
+            return 0; // After 12 months, no burn
+        }
+
+        revert InvalidDurationIndex();
+    }
+
+    /**
+     * @dev Internal function to calculate elapsed months since staking start
+     * @param startTime The timestamp when staking started
+     * @return monthsElapsed Number of full months elapsed
+     */
+    function calculateElapsedMonths(
+        uint32 startTime
+    ) internal view returns (uint256 monthsElapsed) {
+        if (block.timestamp <= startTime) return 0;
+
+        uint256 secondsElapsed = block.timestamp - startTime;
+        // Calculate months as 30-day periods for simplicity
+        uint256 daysElapsed = secondsElapsed / 1 days;
+        monthsElapsed = daysElapsed / 30;
+
+        return monthsElapsed;
     }
 
     /**
@@ -428,16 +657,6 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
                 if (j >= userStakes[user].length) {
                     j = 0;
                     i++;
-
-                    if (totalCompoundRewardsWithPrecision > 0) {
-                        // Update voting power
-                        meliesToken.updateVotingPowerOnStaking(
-                            address(this),
-                            user,
-                            totalCompoundRewardsWithPrecision /
-                                10 ** PRECISION_FACTOR
-                        );
-                    }
                 }
             }
         }
@@ -594,5 +813,121 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
         uint256 newMinStakeAmount
     ) external onlyRole(ADMIN_ROLE) {
         MIN_STAKE_AMOUNT = newMinStakeAmount;
+    }
+
+    // View functions for early unstaking information
+
+    /**
+     * @dev Returns the staking program name for a given duration index
+     * @param durationIndex Index representing the staking duration
+     * @return programName Name of the staking program
+     */
+    function getStakingProgramNameView(
+        uint8 durationIndex
+    ) external pure returns (string memory programName) {
+        return getStakingProgramName(durationIndex);
+    }
+
+    /**
+     * @dev Calculates the burn percentage for early unstaking preview
+     * @param durationIndex Index representing the staking duration
+     * @param monthsElapsed Number of full months elapsed since staking
+     * @return burnPercentage Percentage to burn (0-9000 representing 0-90%)
+     */
+    function getEarlyUnstakingBurnPercentage(
+        uint8 durationIndex,
+        uint256 monthsElapsed
+    ) external pure returns (uint256 burnPercentage) {
+        return
+            calculateEarlyUnstakingBurnPercentage(durationIndex, monthsElapsed);
+    }
+
+    /**
+     * @dev Previews the early unstaking result for a user's stake
+     * @param user Address of the user
+     * @param stakeIndex Index of the stake
+     * @param ponderatedAmountWithPrecision Amount to unstake with precision
+     * @return netAmount Amount user would receive after burn
+     * @return burnAmount Amount that would be burned
+     * @return burnPercentage Burn percentage applied (0-9000)
+     * @return monthsElapsed Number of months elapsed since staking
+     * @return programName Name of the staking program
+     */
+    function previewEarlyUnstaking(
+        address user,
+        uint256 stakeIndex,
+        uint256 ponderatedAmountWithPrecision
+    )
+        external
+        view
+        returns (
+            uint256 netAmount,
+            uint256 burnAmount,
+            uint256 burnPercentage,
+            uint256 monthsElapsed,
+            string memory programName
+        )
+    {
+        require(stakeIndex < userStakes[user].length, "Invalid stake index");
+        StakingInfo storage userStake = userStakes[user][stakeIndex];
+
+        // Calculate elapsed months and burn percentage
+        monthsElapsed = calculateElapsedMonths(userStake.startTime);
+        burnPercentage = calculateEarlyUnstakingBurnPercentage(
+            userStake.durationIndex,
+            monthsElapsed
+        );
+        programName = getStakingProgramName(userStake.durationIndex);
+
+        uint256 rewardsWithPrecision = userStake
+            .accumulatedRewardsWithPrecision;
+        uint256 amountWithPrecision = (ponderatedAmountWithPrecision *
+            (10 ** DURATION_MULTIPLIER_PRECISION)) /
+            DURATION_MULTIPLIERS[userStake.durationIndex];
+
+        // Calculate total amount (principal + rewards)
+        uint256 totalAmountWithPrecision = amountWithPrecision +
+            rewardsWithPrecision;
+
+        // Calculate burn amount
+        uint256 burnAmountWithPrecision = (totalAmountWithPrecision *
+            burnPercentage) / 10000;
+        uint256 netAmountWithPrecision = totalAmountWithPrecision -
+            burnAmountWithPrecision;
+
+        netAmount = netAmountWithPrecision / (10 ** PRECISION_FACTOR);
+        burnAmount = burnAmountWithPrecision / (10 ** PRECISION_FACTOR);
+    }
+
+    /**
+     * @dev Checks if early unstaking is allowed for a specific stake
+     * @param user Address of the user
+     * @param stakeIndex Index of the stake
+     * @return isAllowed Whether early unstaking is allowed
+     * @return reason Reason if not allowed (empty string if allowed)
+     */
+    function canEarlyUnstake(
+        address user,
+        uint256 stakeIndex
+    ) external view returns (bool isAllowed, string memory reason) {
+        if (stakeIndex >= userStakes[user].length) {
+            return (false, "Invalid stake index");
+        }
+
+        StakingInfo storage userStake = userStakes[user][stakeIndex];
+
+        if (userStake.durationIndex == 0) {
+            return (false, "Cannot early unstake no-lock staking");
+        }
+
+        if (block.timestamp >= userStake.endTime) {
+            return (false, "Lock period has ended, use regular unstake");
+        }
+
+        if (isRewardUpdating) {
+            return (false, "Rewards are being updated");
+        }
+
+        return (true, "");
     }
 }
