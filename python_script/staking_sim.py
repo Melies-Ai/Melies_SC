@@ -79,15 +79,16 @@ class StakingSystem:
         print(f"{self.total_ponderated_stake:.20f}")
 
 def generate_and_simulate_scenario(num_stakers, duration, num_stake, num_unstake):
+    action_per_day = 150
     system = StakingSystem(daily_budget=Decimal('624657534246.0'))
     actions = []
     stakers = [f"user{i+1}" for i in range(num_stakers)]
     user_stakes = {user: [] for user in stakers}
     lock_periods = [0, 90, 180, 365, 365]
 
-    stake_amounts = [Decimal('100.0e8'), Decimal('200.0e8'), Decimal('300.0e8'), Decimal('200.0e8')]
+    stake_amounts = [Decimal('5000.0e8'), Decimal('6000.0e8'), Decimal('7000.0e8'), Decimal('5000.0e8')]
     #duration_indices = [0, 0, 0, 0]
-    duration_indices = [3, 1, 2, 3]
+    duration_indices = [2, 1, 2, 3]
 
 
     total_actions = num_stakers * (num_stake + num_unstake)
@@ -99,31 +100,19 @@ def generate_and_simulate_scenario(num_stakers, duration, num_stake, num_unstake
         counter = 1
         for user in stakers:
             action_queue.append((day, "stake", user, i % 4))
-            if(counter % 150 == 0):
+            if(counter % action_per_day == 0):
                 day += action_interval
             counter += 1
     for i in range(num_unstake):
+        counter = 1
         for user in stakers:
             action_queue.append((day, "unstake", user, i % 4))
-            if(counter % 150 == 0):
+            if(counter % action_per_day == 0):
                 day += action_interval
             counter += 1
     
     action_queue = sorted(action_queue, key=lambda x: x[0])
     action_queue = [item for item in action_queue if item[0] <= duration]
-
-    #stake_amounts = [Decimal('1000.0e8'), Decimal('100.0e8'), Decimal('1000.0e8'), Decimal('10000.0e8'), Decimal('1000.0e8')]
-    #duration_indices = [2, 0, 1, 4, 3]
-    #action_queue = [
-    #    (1, "stake", "user2", 0),
-    #    (2, "stake", "user1", 1),
-    #    (5, "stake", "user4", 2),
-    #    (10, "stake", "user3", 3),
-    #    (23, "unstake", "user1", 0),
-    #    (96, "unstake", "user4", 0),
-    #    (108, "stake", "user1", 4),
-    #    (196, "unstake", "user2", 0)
-    #]
 
     day = 1
     while action_queue and day <= duration:
@@ -142,14 +131,14 @@ def generate_and_simulate_scenario(num_stakers, duration, num_stake, num_unstake
         elif action_type == "unstake":
             if len(user_stakes[user]) > index:
                 stake_day, _, stake_duration_index = user_stakes[user][0]
-                lock_period = lock_periods[stake_duration_index]
-                if day - stake_day >= lock_period + 1:
+                lock_period = lock_periods[stake_duration_index] + 1
+                if day - stake_day > lock_period:
                     unstaked_amount = system.unstake(user, 0)
                     if unstaked_amount > 0:
                         actions.append(f"{day}|unstake|{user}|{0}|{0}")
                         user_stakes[user].pop(0)
                 else:
-                    action_queue.append((stake_day + lock_period + 1, action_type, user, index))
+                    action_queue.append((stake_day + lock_period+1, action_type, user, index))
                     action_queue = [item for item in action_queue if item[0] <= duration]
                     action_queue = sorted(action_queue, key=lambda x: x[0])
 

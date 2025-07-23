@@ -37,7 +37,7 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
 
     error RewardsBeingUpdated();
     error StakingAmountTooLow();
-    error Minimum5000MELStakeRequired();
+    error MinimumStakeRequired();
     error InvalidDurationIndex();
     error CannotStakeAfter90DaysFromTGE();
     error InvalidStakeIndex();
@@ -49,8 +49,9 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
     error CanOnlyToggleForNoLockStaking();
     error InvalidMultiplier();
     error DailyBudgetMustBeGreaterThanZero();
-    error EarlyUnstakingNotAllowed();
-    error CannotEarlyUnstakeNoLockStaking();
+    error TgeTimestampAlreadySet();
+    error TgeTimestampNotSet();
+    error InvalidStartTime();
 
     Melies public meliesToken;
 
@@ -60,7 +61,7 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
     uint256 private constant DURATION_MULTIPLIER_PRECISION = 2;
     uint256 private constant PRECISION_FACTOR = 12;
     uint256 private constant GAS_LIMIT_EXECUTION = 100_000;
-    uint256 public MIN_STAKE_AMOUNT = 150e8;
+    uint256 public MIN_STAKE_AMOUNT = 5000e8;
     bytes32 private constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     uint16[5] public DURATION_MULTIPLIERS = [1e2, 1.3e2, 1.6e2, 2.2e2, 3e2];
 
@@ -74,6 +75,7 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
     address[] private stakers;
     uint32 private tgeTimestamp;
     uint32 private lastUpdateTime;
+    bool public tgeTimestampSet; // Track if TGE timestamp has been set
     uint32 private lastProcessedIndex;
     uint32 private lastProcessedStakeIndex;
     int64 private correctionDailyReward;
@@ -90,35 +92,42 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
         uint8 durationIndex,
         uint256 monthsElapsed
     );
+    event TgeTimestampSet(uint256 tgeTimestamp);
 
     /**
      * @dev Constructor to initialize the MeliesStaking contract
      * @param _meliesToken Address of the Melies token contract
-     * @param _tgeTimestamp Timestamp for the Token Generation Event (TGE)
      */
-    constructor(address _meliesToken, uint32 _tgeTimestamp) {
+    constructor(address _meliesToken) {
         meliesToken = Melies(_meliesToken);
-        tgeTimestamp = _tgeTimestamp;
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(ADMIN_ROLE, msg.sender);
     }
 
     /**
-     * @dev Grants BURNER_ROLE to this contract for early unstaking burns
-     * Must be called by an admin after deployment
+     * @dev Sets the TGE timestamp (one-time only, admin only)
+     * @param _tgeTimestamp The TGE timestamp to set
      */
-    function initializeBurnerRole() external onlyRole(ADMIN_ROLE) {
-        meliesToken.grantRole(meliesToken.BURNER_ROLE(), address(this));
+    function setTgeTimestamp(
+        uint32 _tgeTimestamp
+    ) external onlyRole(ADMIN_ROLE) {
+        if (tgeTimestampSet) revert TgeTimestampAlreadySet();
+        if (_tgeTimestamp == 0) revert InvalidStartTime();
+
+        tgeTimestamp = _tgeTimestamp;
+        tgeTimestampSet = true;
+
+        emit TgeTimestampSet(_tgeTimestamp);
     }
 
     /**
      * @dev Allows users to stake their tokens
-     * @param _amount Amount of tokens to stake (minimum 150 MEL, 5000 MEL for index 4)
+     * @param _amount Amount of tokens to stake (minimum 5000 MEL, 200000 MEL for index 4)
      * @param _durationIndex Index representing the staking duration
      * @param _compoundRewards Whether to compound rewards or not
      * Requirements:
-     * - Amount must be at least 150 MEL tokens for all stakes
-     * - Amount must be at least 5000 MEL tokens for index 4 stakes
+     * - Amount must be at least 5000 MEL tokens for all stakes
+     * - Amount must be at least 200000 MEL tokens for index 4 stakes
      * - Cannot stake with index 4 after 90 days from TGE
      */
     function stake(
@@ -128,10 +137,11 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
     ) external whenNotPaused nonReentrant {
         if (isRewardUpdating) revert RewardsBeingUpdated();
         if (_amount < MIN_STAKE_AMOUNT) revert StakingAmountTooLow();
-        if (_durationIndex == 4 && _amount < 5000e8)
-            revert Minimum5000MELStakeRequired();
+        if (_durationIndex == 4 && _amount < 200000e8)
+            revert StakingAmountTooLow();
         if (_durationIndex >= DURATION_MULTIPLIERS.length)
             revert InvalidDurationIndex();
+        if (!tgeTimestampSet) revert TgeTimestampNotSet();
         if (_durationIndex == 4 && block.timestamp > tgeTimestamp + 90 days) {
             revert CannotStakeAfter90DaysFromTGE();
         }
@@ -176,14 +186,14 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
      * @param _stakeIndex Index of the stake to unstake
      * @param _ponderatedAmountWithPrecision Amount to unstake with precision
      * Requirements:
-     * - Remaining amount must be at least 150 MEL tokens for all stakes
-     * - Remaining amount must be at least 5000 MEL tokens for index 4 stakes
+     * - Remaining amount must be at least 5000 MEL tokens for all stakes
+     * - Remaining amount must be at least 200000 MEL tokens for index 4 stakes
      * - Staking period must have ended
      */
     function unstake(
         uint256 _stakeIndex,
         uint256 _ponderatedAmountWithPrecision
-    ) external nonReentrant {
+    ) public nonReentrant whenNotPaused {
         if (isRewardUpdating) revert RewardsBeingUpdated();
         if (_stakeIndex >= userStakes[msg.sender].length)
             revert InvalidStakeIndex();
@@ -256,12 +266,13 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
             if (
                 userStake.amountWithPrecision <
                 MIN_STAKE_AMOUNT * 10 ** PRECISION_FACTOR
-            ) revert StakingAmountTooLow();
+            ) revert MinimumStakeRequired();
 
             if (
                 userStake.durationIndex == 4 &&
-                userStake.amountWithPrecision < 5000e8 * 10 ** PRECISION_FACTOR
-            ) revert Minimum5000MELStakeRequired();
+                userStake.amountWithPrecision <
+                200000e8 * 10 ** PRECISION_FACTOR
+            ) revert MinimumStakeRequired();
         }
 
         emit Unstaked(
@@ -283,20 +294,20 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
     function earlyUnstake(
         uint256 _stakeIndex,
         uint256 _ponderatedAmountWithPrecision
-    ) external nonReentrant {
+    ) external nonReentrant whenNotPaused {
         if (isRewardUpdating) revert RewardsBeingUpdated();
         if (_stakeIndex >= userStakes[msg.sender].length)
             revert InvalidStakeIndex();
 
         StakingInfo storage userStake = userStakes[msg.sender][_stakeIndex];
 
-        // Cannot early unstake no-lock staking
-        if (userStake.durationIndex == 0)
-            revert CannotEarlyUnstakeNoLockStaking();
-
-        // Must be before the lock period ends
-        if (block.timestamp >= userStake.endTime)
-            revert EarlyUnstakingNotAllowed();
+        // If there is no lock or the staking period has ended, unstake normally
+        if (
+            userStake.durationIndex == 0 || block.timestamp >= userStake.endTime
+        ) {
+            unstake(_stakeIndex, _ponderatedAmountWithPrecision);
+            return;
+        }
 
         if (
             _ponderatedAmountWithPrecision >
@@ -392,12 +403,13 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
             if (
                 userStake.amountWithPrecision <
                 MIN_STAKE_AMOUNT * 10 ** PRECISION_FACTOR
-            ) revert StakingAmountTooLow();
+            ) revert MinimumStakeRequired();
 
             if (
                 userStake.durationIndex == 4 &&
-                userStake.amountWithPrecision < 5000e8 * 10 ** PRECISION_FACTOR
-            ) revert Minimum5000MELStakeRequired();
+                userStake.amountWithPrecision <
+                200000e8 * 10 ** PRECISION_FACTOR
+            ) revert MinimumStakeRequired();
         }
 
         emit EarlyUnstaked(
@@ -426,22 +438,6 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
     }
 
     /**
-     * @dev Internal function to get the staking program name from duration index
-     * @param durationIndex Index representing the staking duration
-     * @return Program name as string
-     */
-    function getStakingProgramName(
-        uint8 durationIndex
-    ) internal pure returns (string memory) {
-        if (durationIndex == 0) return "NO_LOCK";
-        if (durationIndex == 1) return "LUNAR"; // 3 months / 90 days
-        if (durationIndex == 2) return "SOLAR"; // 6 months / 180 days
-        if (durationIndex == 3) return "PULSAR"; // 12 months / 365 days
-        if (durationIndex == 4) return "GENESIS"; // 12 months / 365 days
-        revert InvalidDurationIndex();
-    }
-
-    /**
      * @dev Internal function to calculate burn percentage for early unstaking
      * @param durationIndex Index representing the staking duration
      * @param monthsElapsed Number of full months that have elapsed since staking
@@ -454,7 +450,7 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
         // No burn for no-lock staking (index 0)
         if (durationIndex == 0) return 0;
 
-        // LUNAR (3 months lock-up) - index 1
+        // index 1 (3 months lock-up)
         if (durationIndex == 1) {
             if (monthsElapsed == 0) return 9000; // 90%
             if (monthsElapsed == 1) return 6000; // 60%
@@ -462,7 +458,7 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
             return 0; // After 3 months, no burn
         }
 
-        // SOLAR (6 months lock-up) - index 2
+        // index 2 (6 months lock-up)
         if (durationIndex == 2) {
             if (monthsElapsed == 0) return 9000; // 90%
             if (monthsElapsed == 1) return 7500; // 75%
@@ -473,7 +469,7 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
             return 0; // After 6 months, no burn
         }
 
-        // PULSAR & GENESIS (12 months lock-up) - index 3 & 4
+        // index 3 & 4 (12 months lock-up)
         if (durationIndex == 3 || durationIndex == 4) {
             if (monthsElapsed == 0) return 9000; // 90.0%
             if (monthsElapsed == 1) return 8250; // 82.5%
@@ -515,7 +511,9 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
      * @dev Allows users to claim their accumulated rewards
      * @param stakeIndex Index of the stake to claim rewards from
      */
-    function claimRewards(uint256 stakeIndex) external nonReentrant {
+    function claimRewards(
+        uint256 stakeIndex
+    ) external nonReentrant whenNotPaused {
         if (isRewardUpdating) revert RewardsBeingUpdated();
         if (stakeIndex >= userStakes[msg.sender].length)
             revert InvalidStakeIndex();
@@ -815,18 +813,15 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
         MIN_STAKE_AMOUNT = newMinStakeAmount;
     }
 
-    // View functions for early unstaking information
-
     /**
-     * @dev Returns the staking program name for a given duration index
-     * @param durationIndex Index representing the staking duration
-     * @return programName Name of the staking program
+     * @dev Checks if TGE timestamp has been set
+     * @return True if TGE timestamp has been set
      */
-    function getStakingProgramNameView(
-        uint8 durationIndex
-    ) external pure returns (string memory programName) {
-        return getStakingProgramName(durationIndex);
+    function isTgeTimestampSet() external view returns (bool) {
+        return tgeTimestampSet;
     }
+
+    // View functions for early unstaking information
 
     /**
      * @dev Calculates the burn percentage for early unstaking preview
@@ -851,7 +846,6 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
      * @return burnAmount Amount that would be burned
      * @return burnPercentage Burn percentage applied (0-9000)
      * @return monthsElapsed Number of months elapsed since staking
-     * @return programName Name of the staking program
      */
     function previewEarlyUnstaking(
         address user,
@@ -864,8 +858,7 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
             uint256 netAmount,
             uint256 burnAmount,
             uint256 burnPercentage,
-            uint256 monthsElapsed,
-            string memory programName
+            uint256 monthsElapsed
         )
     {
         require(stakeIndex < userStakes[user].length, "Invalid stake index");
@@ -877,7 +870,6 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
             userStake.durationIndex,
             monthsElapsed
         );
-        programName = getStakingProgramName(userStake.durationIndex);
 
         uint256 rewardsWithPrecision = userStake
             .accumulatedRewardsWithPrecision;
@@ -897,37 +889,5 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
 
         netAmount = netAmountWithPrecision / (10 ** PRECISION_FACTOR);
         burnAmount = burnAmountWithPrecision / (10 ** PRECISION_FACTOR);
-    }
-
-    /**
-     * @dev Checks if early unstaking is allowed for a specific stake
-     * @param user Address of the user
-     * @param stakeIndex Index of the stake
-     * @return isAllowed Whether early unstaking is allowed
-     * @return reason Reason if not allowed (empty string if allowed)
-     */
-    function canEarlyUnstake(
-        address user,
-        uint256 stakeIndex
-    ) external view returns (bool isAllowed, string memory reason) {
-        if (stakeIndex >= userStakes[user].length) {
-            return (false, "Invalid stake index");
-        }
-
-        StakingInfo storage userStake = userStakes[user][stakeIndex];
-
-        if (userStake.durationIndex == 0) {
-            return (false, "Cannot early unstake no-lock staking");
-        }
-
-        if (block.timestamp >= userStake.endTime) {
-            return (false, "Lock period has ended, use regular unstake");
-        }
-
-        if (isRewardUpdating) {
-            return (false, "Rewards are being updated");
-        }
-
-        return (true, "");
     }
 }

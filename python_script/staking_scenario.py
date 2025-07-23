@@ -66,17 +66,17 @@ class StakingSystem:
 system = StakingSystem(daily_budget=624657534246.0)
 
 # Day 1
-system.add_stake("Bob", Decimal('1000.0e8'), Decimal('1.6'))
+system.add_stake("Bob", Decimal('10000.0e8'), Decimal('1.6'))
 
 # Day 2
 system.simulate_day()
-system.add_stake("Alice", Decimal('150.0e8'), Decimal('1'))
+system.add_stake("Alice", Decimal('5000.0e8'), Decimal('1'))
 
 # Day 5
 system.simulate_day()
 system.simulate_day()
 system.simulate_day()
-system.add_stake("Bob", Decimal('1000.0e8'), Decimal('1.3'))
+system.add_stake("Bob", Decimal('10000.0e8'), Decimal('1.3'))
 
 # Day 9
 for _ in range(4):
@@ -84,7 +84,7 @@ for _ in range(4):
 
 # Day 10
 system.simulate_day()
-system.add_stake("Charlie", Decimal('10000.0e8'), Decimal('3'))
+system.add_stake("Charlie", Decimal('200000.0e8'), Decimal('3'))
 
 # Day 22
 for _ in range(12):
@@ -110,7 +110,7 @@ for _ in range(11):
 
 # Day 108
 system.simulate_day()
-system.add_stake("Alice", Decimal('1000.0e8'), Decimal('2.2'))
+system.add_stake("Alice", Decimal('10000.0e8'), Decimal('2.2'))
 
 # Day 195
 for _ in range(87):

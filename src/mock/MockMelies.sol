@@ -17,23 +17,15 @@ contract MockMeliesICO is MeliesICO {
         address _meliesToken,
         address _tokenDistributor,
         address _usdcToken,
-        address _usdtToken,
         address _uniswapRouter,
-        address _ethUsdPriceFeed,
-        uint256 _tgeTimestamp
+        address _ethUsdPriceFeed
     )
         MeliesICO(
             _meliesToken,
             _tokenDistributor,
             _usdcToken,
-            _usdtToken,
             _uniswapRouter,
-            _ethUsdPriceFeed,
-            _tgeTimestamp
+            _ethUsdPriceFeed
         )
     {}
-
-    function setTgeTimestamp(uint256 newTgeTimestamp) public {
-        tgeTimestamp = newTgeTimestamp;
-    }
 }

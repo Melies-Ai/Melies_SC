@@ -9,12 +9,6 @@ pragma solidity ^0.8.20;
  * and vesting schedules.
  */
 interface IMeliesICO {
-    enum purchaseMethod {
-        USDC,
-        USDT,
-        FIAT
-    }
-
     /**
      * @dev Struct representing a sale round
      * @param startTime Start time of the round
@@ -24,12 +18,10 @@ interface IMeliesICO {
      * @param softCap Minimum USDC to be raised for the round to be considered successful (6 decimals)
      * @param minPurchase Minimum purchase amount in USDC (6 decimals)
      * @param maxPurchase Maximum purchase amount in USDC (6 decimals)
-     * @param totalRaised Total amount of USDC raised in this round (6 decimals)
-     * @param totalRaisedUsdc Total amount of USDC raised in this round (6 decimals)
-     * @param totalRaisedUsdt Total amount of USDT raised in this round (6 decimals)
+     * @param totalUsdcRaised Total amount of USDC raised in this round (6 decimals)
      * @param isFinish Whether the round is finished
-     * @param cliffDuration Duration of the cliff period for token vesting
-     * @param vestingDuration Total duration of the vesting period
+     * @param cliffMonthDuration Duration of the cliff period for token vesting (in months)
+     * @param vestingMonthDuration Total duration of the vesting period (in months)
      * @param tgeReleasePercentage TGE release percentage
      */
     struct SaleRound {
@@ -40,149 +32,40 @@ interface IMeliesICO {
         uint256 softCap;
         uint256 minPurchase;
         uint256 maxPurchase;
-        uint256 totalRaised;
-        uint256 totalRaisedUsdc;
-        uint256 totalRaisedUsdt;
+        uint256 totalUsdcRaised;
         bool isFinish;
-        uint256 cliffDuration;
-        uint256 vestingDuration;
+        uint256 cliffMonthDuration;
+        uint256 vestingMonthDuration;
         uint256 tgeReleasePercentage;
     }
 
-    /**
-     * @dev Struct representing an allocation for a beneficiary
-     * @param totalUsdcAmount Total amount of USDC spent
-     * @param totalUsdtAmount Total amount of USDT spent
-     */
-    struct Allocation {
-        uint256 totalUsdcAmount;
-        uint256 totalUsdtAmount;
-    }
-
     // Events
-    /**
-     * @dev Emitted when the slippage tolerance is updated
-     * @param newSlippageTolerance The new slippage tolerance value
-     */
     event SlippageToleranceUpdated(uint256 newSlippageTolerance);
-
-    /**
-     * @dev Emitted when tokens are purchased
-     * @param buyer Address of the token buyer
-     * @param usdAmount Amount of USD spent on the purchase
-     * @param tokenAmount Amount of tokens purchased
-     */
     event TokensPurchased(
         address indexed buyer,
         uint256 usdAmount,
         uint256 tokenAmount
     );
-
-    /**
-     * @dev Emitted when a new allocation is added
-     * @param beneficiary Address of the token beneficiary
-     * @param tokenAmount Amount of tokens allocated
-     * @param tgeTimestamp Timestamp for the Token Generation Event
-     * @param cliffDuration Duration of the cliff period
-     * @param vestingDuration Total duration of the vesting period
-     * @param roundId ID of the sale round
-     */
     event AllocationAdded(
         address indexed beneficiary,
         uint256 tokenAmount,
-        uint256 tgeTimestamp,
-        uint256 cliffDuration,
-        uint256 vestingDuration,
+        uint256 cliffMonthDuration,
+        uint256 vestingMonthDuration,
         uint256 roundId
     );
-
-    /**
-     * @dev Emitted when funds are withdrawn from a round
-     * @param roundId ID of the round
-     * @param usdcAmount Amount of USDC withdrawn
-     * @param usdtAmount Amount of USDT withdrawn
-     */
-    event RoundFundsWithdrawn(
-        uint256 indexed roundId,
-        uint256 usdcAmount,
-        uint256 usdtAmount
-    );
-
-    /**
-     * @dev Emitted when the ICO is ended
-     * @param claimEnabled Whether token claiming is enabled
-     */
+    event RoundFundsWithdrawn(uint256 indexed roundId, uint256 usdcAmount);
     event IcoEnded(bool claimEnabled);
-
-    /**
-     * @dev Emitted when refunds become available for a round
-     * @param roundId ID of the round
-     */
     event RefundsAvailableForRound(uint256 indexed roundId);
-
-    /**
-     * @dev Emitted when a refund is processed
-     * @param user Address of the user receiving the refund
-     * @param usdcAmount Amount of USDC refunded
-     * @param usdtAmount Amount of USDT refunded
-     */
-    event Refunded(
-        address indexed user,
-        uint256 usdcAmount,
-        uint256 usdtAmount
-    );
-
-    /**
-     * @dev Emitted when USDC is withdrawn
-     * @param recipient Address receiving the withdrawn USDC
-     * @param amount Amount of USDC withdrawn
-     */
+    event Refunded(address indexed user, uint256 usdcAmount);
     event UsdcWithdrawn(address indexed recipient, uint256 amount);
-
-    /**
-     * @dev Emitted when USDT is withdrawn
-     * @param recipient Address receiving the withdrawn USDT
-     * @param amount Amount of USDT withdrawn
-     */
-    event UsdtWithdrawn(address indexed recipient, uint256 amount);
-
-    /**
-     * @dev Emitted when ETH is withdrawn
-     * @param recipient Address receiving the withdrawn ETH
-     * @param amount Amount of ETH withdrawn
-     */
     event EthWithdrawn(address indexed recipient, uint256 amount);
-
-    /**
-     * @dev Emitted when tokens are recovered
-     * @param token Address of the recovered token
-     * @param recipient Address receiving the recovered tokens
-     * @param amount Amount of tokens recovered
-     */
     event TokensRecovered(
         address indexed token,
         address indexed recipient,
         uint256 amount
     );
-
-    /**
-     * @dev Emitted when addresses are added to the whitelist
-     * @param roundId ID of the sale round
-     * @param addresses Array of addresses added to the whitelist
-     */
     event AddedToWhitelist(uint256 indexed roundId, address[] addresses);
-
-    /**
-     * @dev Emitted when addresses are removed from the whitelist
-     * @param roundId ID of the sale round
-     * @param addresses Array of addresses removed from the whitelist
-     */
     event RemovedFromWhitelist(uint256 indexed roundId, address[] addresses);
-
-    /**
-     * @dev Emitted when a future round is updated
-     * @param roundId ID of the updated round
-     */
     event FutureRoundUpdated(uint256 indexed roundId);
 
     // Errors
@@ -201,10 +84,10 @@ interface IMeliesICO {
     error NotWhitelisted();
     error BelowMinimumPurchase();
     error ExceedsMaximumPurchase();
+    error ExceedsWalletContributionLimit();
     error RoundCapExceeded();
     error NoTokensSent();
     error UsdcAmountMustBeGreaterThanZero();
-    error UsdtAmountMustBeGreaterThanZero();
     error UsdAmountMustBeGreaterThanZero();
     error InvalidBeneficiaryAddress();
     error TokenAmountMustBeGreaterThanZero();
@@ -216,15 +99,14 @@ interface IMeliesICO {
     error NoAllocationToRefund();
     error CannotRecoverMeliesTokens();
     error CannotRecoverUsdcTokens();
-    error CannotRecoverUsdtTokens();
     error InsufficientTokenBalance();
-
     error NoEthToWithdraw();
     error EthTransferFailed();
     error NoActiveRound();
     error InvalidEthUsdPrice();
+    error InvalidRoundId();
+    error InvalidBuyer();
 
-    // Functions
     /**
      * @dev Updates the slippage tolerance for ETH to USDC swaps
      * @param _newSlippageTolerance New slippage tolerance value (max 10%)
@@ -240,8 +122,8 @@ interface IMeliesICO {
      * @param _softCap Minimum USDC to be raised for the round to be considered successful (6 decimals)
      * @param _minPurchase Minimum purchase amount in USDC (6 decimals)
      * @param _maxPurchase Maximum purchase amount in USDC (6 decimals)
-     * @param _cliffDuration Cliff duration for token vesting
-     * @param _vestingDuration Total vesting duration
+     * @param _cliffMonthDuration Cliff duration for token vesting (in months)
+     * @param _vestingMonthDuration Total vesting duration (in months)
      * @param _tgeReleasePercentage TGE release percentage
      */
     function addSaleRound(
@@ -252,21 +134,9 @@ interface IMeliesICO {
         uint256 _softCap,
         uint256 _minPurchase,
         uint256 _maxPurchase,
-        uint256 _cliffDuration,
-        uint256 _vestingDuration,
+        uint256 _cliffMonthDuration,
+        uint256 _vestingMonthDuration,
         uint256 _tgeReleasePercentage
-    ) external;
-
-    /**
-     * @dev Allows admins to update parameters of a future round
-     * @param _roundId ID of the round to update
-     * @param _maxCap New maximum USD to be raised in this round
-     * @param _maxPurchase New maximum purchase amount in USD
-     */
-    function updateFutureRound(
-        uint256 _roundId,
-        uint256 _maxCap,
-        uint256 _maxPurchase
     ) external;
 
     /**
@@ -291,27 +161,28 @@ interface IMeliesICO {
 
     /**
      * @dev Allows users to buy tokens with ETH
+     * @param _roundId ID of the sale round
      */
-    function buyWithEth() external payable;
+    function buyWithEth(uint8 _roundId) external payable;
 
     /**
      * @dev Allows users to buy tokens with USDC
+     * @param _roundId ID of the sale round
      * @param _amount Amount of USDC to spend on token purchase
      */
-    function buyWithUsdc(uint256 _amount) external;
-
-    /**
-     * @dev Allows users to buy tokens with USDT
-     * @param _amount Amount of USDT to spend on token purchase
-     */
-    function buyWithUsdt(uint256 _amount) external;
+    function buyWithUsdc(uint8 _roundId, uint256 _amount) external;
 
     /**
      * @dev Allows admins to add purchases made with fiat currency
      * @param _buyer Address of the token buyer
      * @param _usdAmount Amount of USD equivalent purchased
+     * @param _roundId ID of the sale round
      */
-    function addFiatPurchase(address _buyer, uint256 _usdAmount) external;
+    function addFiatPurchase(
+        address _buyer,
+        uint256 _usdAmount,
+        uint8 _roundId
+    ) external;
 
     /**
      * @dev Allows admins to withdraw funds raised in a specific round
@@ -341,11 +212,6 @@ interface IMeliesICO {
     function withdrawUsdc() external;
 
     /**
-     * @dev Allows admins to withdraw raised USDT after ICO ends
-     */
-    function withdrawUsdt() external;
-
-    /**
      * @dev Allows admins to withdraw any ETH in the contract after ICO ends
      */
     function withdrawEth() external;
@@ -370,13 +236,48 @@ interface IMeliesICO {
     function getCurrentRoundId() external view returns (uint256);
 
     /**
-     * @dev Retrieves the allocation details for a specific beneficiary and round
+     * @dev Retrieves the user's USDC contribution for a specific round
      * @param _beneficiary Address of the beneficiary
      * @param _roundId ID of the sale round
-     * @return The Allocation struct for the specified beneficiary and round
+     * @return The total USDC amount contributed by the user in the specified round
      */
-    function getAllocationDetails(
+    function getUserRoundContribution(
         address _beneficiary,
         uint256 _roundId
-    ) external view returns (Allocation memory);
+    ) external view returns (uint256);
+
+    /**
+     * @dev Gets the total contribution amount for a specific wallet in a specific round
+     * @param _wallet Address of the wallet to check
+     * @param _roundId ID of the round to check
+     * @return Total USD amount contributed by the wallet in the round
+     */
+    function getWalletContribution(
+        address _wallet,
+        uint256 _roundId
+    ) external view returns (uint256);
+
+    /**
+     * @dev Gets the total tokens sold across all ICO rounds
+     * @return Total tokens sold
+     */
+    function getTotalTokensSold() external view returns (uint256);
+
+    /**
+     * @dev Gets the total unsold tokens
+     * @return Total unsold tokens
+     */
+    function getUnsoldTokens() external view returns (uint256);
+
+    /**
+     * @dev Gets the sales performance percentage
+     * @return Sales performance as a percentage (0-100)
+     */
+    function getSalesPerformance() external view returns (uint256);
+
+    /**
+     * @dev Checks if unsold tokens have been distributed
+     * @return True if unsold tokens have been distributed
+     */
+    function isUnsoldTokensDistributed() external view returns (bool);
 }

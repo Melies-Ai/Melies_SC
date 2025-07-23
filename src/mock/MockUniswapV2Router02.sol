@@ -10,10 +10,15 @@ contract MockUniswapV2Router02 is Test, IUniswapV2Router02 {
     address private immutable _WETH;
 
     mapping(address => mapping(address => uint256)) public exchangeRates;
+    bool public shouldRevert;
 
     constructor() {
         _factory = address(this);
         _WETH = address(0);
+    }
+
+    function setShouldRevert(bool _shouldRevert) public {
+        shouldRevert = _shouldRevert;
     }
 
     function factory() public pure override returns (address) {
@@ -38,6 +43,8 @@ contract MockUniswapV2Router02 is Test, IUniswapV2Router02 {
         address to,
         uint256 deadline
     ) external payable override returns (uint256[] memory amounts) {
+        if (shouldRevert) revert("MockUniswapV2Router02: revert");
+
         //avoid warning
         deadline = deadline;
         require(path[0] == WETH(), "First token must be WETH");
