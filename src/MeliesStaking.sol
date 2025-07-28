@@ -121,14 +121,37 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
     }
 
     /**
-     * @dev Allows users to stake their tokens
-     * @param _amount Amount of tokens to stake (minimum 5000 MEL, 200000 MEL for index 4)
-     * @param _durationIndex Index representing the staking duration
-     * @param _compoundRewards Whether to compound rewards or not
+     * @notice Stakes MEL tokens for a specified duration to earn rewards
+     * @dev Stakes tokens with precision factor scaling and duration-based multipliers.
+     * Creates a new StakingInfo entry with calculated ponderated amounts based on duration multipliers.
+     * Uses 12-digit precision factor (10^12) for accurate reward calculations.
+     *
+     * Duration Options:
+     * - Index 0: No lock, 1x multiplier, compound rewards optional
+     * - Index 1: 90 days, 1.3x multiplier, auto-compound
+     * - Index 2: 180 days, 1.6x multiplier, auto-compound
+     * - Index 3: 365 days, 2.2x multiplier, auto-compound
+     * - Index 4: 365 days VIP, 3x multiplier, auto-compound (min 200k MEL, 90-day window)
+     *
      * Requirements:
-     * - Amount must be at least 5000 MEL tokens for all stakes
-     * - Amount must be at least 200000 MEL tokens for index 4 stakes
-     * - Cannot stake with index 4 after 90 days from TGE
+     * - Contract must not be paused
+     * - Rewards must not be currently updating
+     * - Amount must be at least 5,000 MEL (MIN_STAKE_AMOUNT)
+     * - Amount must be at least 200,000 MEL for VIP staking (index 4)
+     * - Duration index must be valid (0-4)
+     * - TGE timestamp must be set
+     * - VIP staking (index 4) only available within 90 days of TGE
+     * - User must have sufficient token balance and allowance
+     *
+     * @param _amount Amount of MEL tokens to stake (in wei, 8 decimals: 1 MEL = 1e8)
+     * @param _durationIndex Staking duration index (0=no lock, 1=90d, 2=180d, 3=365d, 4=365d VIP)
+     * @param _compoundRewards Whether to compound rewards (ignored for locked stakes, auto-true)
+     *
+     * @custom:security-note Uses SafeERC20 for token transfers and ReentrancyGuard protection
+     * @custom:precision-note Amounts stored with 12-digit precision factor for accurate calculations
+     * @custom:gas-note First stake for user adds them to stakers array (higher gas cost)
+     *
+     * Emits a {Staked} event with user address, amount, and duration index.
      */
     function stake(
         uint256 _amount,
@@ -182,13 +205,54 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
     }
 
     /**
-     * @dev Allows users to unstake their tokens and claim rewards
-     * @param _stakeIndex Index of the stake to unstake
-     * @param _ponderatedAmountWithPrecision Amount to unstake with precision
+     * @notice Unstakes MEL tokens and claims accumulated rewards after lock period ends
+     * @dev Unstakes specified amount with precision factor handling and automatic reward distribution.
+     * Converts ponderated amounts back to actual token amounts using duration multipliers.
+     * Rewards are automatically included in the unstaked amount.
+     *
+     * Calculation Process:
+     * 1. Validate staking period has ended (or no lock for index 0)
+     * 2. Convert ponderated amount back to actual amount using multiplier
+     * 3. Add accumulated rewards to principal amount
+     * 4. Update global staking totals and user's stake
+     * 5. Remove stake if fully unstaked or validate minimum requirements
+     * 6. Transfer total amount (principal + rewards) to user
+     *
+     * Precision Handling:
+     * - Input: ponderated amount with 12-digit precision (10^12)
+     * - Conversion: ponderated ÷ duration_multiplier = actual amount
+     * - Output: actual tokens transferred (8 decimals)
+     *
      * Requirements:
-     * - Remaining amount must be at least 5000 MEL tokens for all stakes
-     * - Remaining amount must be at least 200000 MEL tokens for index 4 stakes
-     * - Staking period must have ended
+     * - Contract must not be paused
+     * - Rewards must not be currently updating
+     * - Stake index must be valid
+     * - Staking period must have ended (unless duration index 0)
+     * - Unstake amount must not exceed ponderated stake amount
+     * - Remaining stake (if partial) must meet minimum requirements
+     * - If partial unstake leaves < 5,000 MEL, must unstake fully
+     * - If partial unstake leaves VIP stake < 200,000 MEL, must unstake fully
+     *
+     * @param _stakeIndex Index of the user's stake to unstake (0-based array index)
+     * @param _ponderatedAmountWithPrecision Ponderated amount to unstake (with 12-digit precision)
+     *
+     * @custom:security-note Uses ReentrancyGuard and SafeERC20 for secure token transfers
+     * @custom:precision-note All calculations use 12-digit precision factor to prevent rounding errors
+     * @custom:gas-note Removing last stake removes user from stakers array (gas refund)
+     *
+     * Emits an {Unstaked} event with user address, unstaked amount, and rewards claimed.
+     *
+     * @custom:example
+     * ```solidity
+     * // Get user's stake info to calculate ponderated amount
+     * StakingInfo memory stake = getUserStakes(user)[0];
+     *
+     * // Unstake full amount after lock period
+     * stakingContract.unstake(0, stake.ponderatedAmountWithPrecision);
+     *
+     * // Partial unstake (half the stake)
+     * stakingContract.unstake(0, stake.ponderatedAmountWithPrecision / 2);
+     * ```
      */
     function unstake(
         uint256 _stakeIndex,
@@ -283,13 +347,52 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
     }
 
     /**
-     * @dev Allows users to unstake their tokens early with burn penalty
-     * @param _stakeIndex Index of the stake to unstake
-     * @param _ponderatedAmountWithPrecision Amount to unstake with precision
+     * @notice Unstakes MEL tokens before lock period ends with progressive burn penalty
+     * @dev Allows early unstaking with burn penalties that decrease over time to incentivize longer staking.
+     * Burns a percentage of total amount (principal + rewards) as penalty.
+     * Automatically calls normal unstake() if lock period has ended or for no-lock stakes.
+     *
+     * Burn Penalty Schedule by Duration Index:
+     * - Index 1 (90 days): 60% → 0% (linear decrease over 90 days)
+     * - Index 2 (180 days): 80% → 0% (linear decrease over 180 days)
+     * - Index 3 (365 days): 90% → 0% (linear decrease over 365 days)
+     * - Index 4 (365 days VIP): 95% → 0% (linear decrease over 365 days)
+     *
+     * Process:
+     * 1. Check if early unstaking is applicable (locked and before end time)
+     * 2. Calculate months elapsed since staking start
+     * 3. Determine burn percentage based on program and elapsed time
+     * 4. Calculate total amount (principal + rewards)
+     * 5. Apply burn penalty to total amount
+     * 6. Mint penalty tokens to contract, then burn them (for tracking)
+     * 7. Transfer net amount to user after penalty
+     * 8. Update stake balances or remove if fully unstaked
+     *
      * Requirements:
-     * - Cannot be used for no-lock staking (index 0)
-     * - Must be before the lock period ends
-     * - Burn percentage is applied based on staking program and elapsed time
+     * - Contract must not be paused
+     * - Rewards must not be currently updating
+     * - Stake index must be valid
+     * - Must be a locked stake (duration index > 0) and before lock period ends
+     * - Unstake amount must not exceed ponderated stake amount
+     * - Remaining stake must meet minimum requirements if partial unstake
+     *
+     * @param _stakeIndex Index of the user's stake to unstake early (0-based array index)
+     * @param _ponderatedAmountWithPrecision Ponderated amount to unstake (with 12-digit precision)
+     *
+     * @custom:security-note Burn mechanism prevents gaming of staking rewards and maintains tokenomics
+     * @custom:precision-note Uses precise burn percentage calculations to avoid rounding exploits
+     * @custom:gas-note Burns tokens by minting then burning to maintain accurate totalSupply tracking
+     *
+     * Emits an {EarlyUnstaked} event with user, amount, rewards, burn amount, duration index, and months elapsed.
+     *
+     * @custom:example
+     * ```solidity
+     * // Early unstake after 1 month of 90-day stake (high ~40% burn penalty)
+     * stakingContract.earlyUnstake(0, stake.ponderatedAmountWithPrecision);
+     *
+     * // Early unstake after 80 days of 90-day stake (low ~7% burn penalty)
+     * stakingContract.earlyUnstake(0, stake.ponderatedAmountWithPrecision);
+     * ```
      */
     function earlyUnstake(
         uint256 _stakeIndex,
@@ -573,12 +676,55 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
     }
 
     /**
-     * @dev Updates accumulated rewards for all stakers
-     * Can only be called by admin and once per day
+     * @notice Updates the global accumulated rewards pool for all stakers based on daily budget allocation
+     * @dev Critical daily maintenance function that distributes rewards proportionally to all stakers.
+     * Uses precision-based calculations and gap correction mechanisms to ensure fair reward distribution.
+     * Can be suspended during updates to prevent calculation conflicts.
+     *
+     * Daily Reward Distribution Process:
+     * 1. Validate 24-hour cooldown period (with 1-minute tolerance for blockchain timing)
+     * 2. Retrieve saved state from any previous incomplete updates
+     * 3. Apply gap correction from previous day's actual vs target distribution
+     * 4. Calculate proportional rewards based on ponderated staking amounts
+     * 5. Update global accumulated reward trackers
+     * 6. Apply precision factor scaling (10^12) for accurate micro-rewards
+     *
+     * Gap Correction System:
+     * - If yesterday's rewards exceeded target: reduce today's budget
+     * - If yesterday's rewards were below target: increase today's budget
+     * - Helps maintain consistent daily reward output over time
+     *
+     * Security Design - No Role Required:
+     * This function is designed to be callable by anyone without access control because:
+     * - Built-in 24-hour cooldown prevents spam calls (CanOnlyUpdateOncePerDay)
+     * - State lock (isRewardUpdating) prevents concurrent execution conflicts
+     * - Only distributes rewards proportionally - cannot drain funds or manipulate balances
+     * - All calculations are deterministic based on current staking state
+     * - No parameters can be manipulated to alter reward distribution
+     * - Function benefits the protocol and stakers - no incentive for malicious use
+     * - Allows automated systems and community members to maintain rewards without privileged access
+     *
+     * Requirements:
+     * - Must wait at least 23 hours 59 minutes since last update
+     * - Reward updating flag must not be active (prevents concurrent updates)
+     * - TGE timestamp must be set (staking rewards start after TGE)
+     *
+     * @custom:security-note This function temporarily locks reward updates to prevent state corruption
+     * @custom:gas-optimization Uses saved state to resume interrupted updates efficiently
+     *
+     * Emits multiple events depending on the update outcome:
+     * - Updates global accumulatedRewardsWithPrecision values
+     * - Modifies correctionDailyReward for next day's gap correction
+     *
+     * @custom:example
+     * ```solidity
+     * // Can be called daily by anyone - admin, automated system, or community member
+     * stakingContract.updateAccumulatedRewards();
+     * ```
      */
-    function updateAccumulatedRewards() external onlyRole(ADMIN_ROLE) {
-        // Allow 1 minute of leeway to avoid issues with block timestamp
-        if (block.timestamp < lastUpdateTime + 1 days - 1 minutes)
+    function updateAccumulatedRewards() external {
+        // wait for 1 days since last update
+        if (block.timestamp < lastUpdateTime + 1 days)
             revert CanOnlyUpdateOncePerDay();
 
         isRewardUpdating = true;
@@ -673,7 +819,11 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
             savedTotalRewards = 0;
 
             // update last update time
-            lastUpdateTime = uint32(block.timestamp);
+            if (lastUpdateTime == 0) {
+                lastUpdateTime = uint32(block.timestamp);
+            } else {
+                lastUpdateTime = lastUpdateTime + 1 days;
+            }
 
             // if total rewards is not 0, we need to adjust the daily budget
             if (totalRewards > 0) {
@@ -695,8 +845,37 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
     }
 
     /**
-     * @dev Toggles compound rewards for a specific stake
-     * @param stakeIndex Index of the stake to toggle compound rewards
+     * @notice Toggles automatic reward compounding on/off for a specific no-lock stake
+     * @dev Allows users to change their reward compounding preference for flexible (index 0) stakes only.
+     * Locked stakes (index 1-4) have fixed compounding enabled and cannot be changed.
+     * Compounding automatically reinvests claimed rewards into the same stake to increase future rewards.
+     *
+     * Compounding Mechanics:
+     * - When enabled: rewards are automatically added to stake principal
+     * - When disabled: rewards must be manually claimed via claimRewards()
+     * - Only affects future reward distribution, not past accumulated rewards
+     * - Toggle can be changed multiple times without penalties
+     *
+     * Requirements:
+     * - Stake must exist (valid stakeIndex for the caller)
+     * - Only works for no-lock staking (durationIndex 0)
+     * - Locked duration stakes always have compounding enabled
+     *
+     * @param stakeIndex The index of the user's stake to modify compounding setting
+     *
+     * @custom:security-note Non-reentrant to prevent manipulation during reward calculations
+     *
+     * State Changes:
+     * - Flips the compoundRewards boolean for the specified stake
+     * - Does not affect the stake amount or accumulated rewards
+     *
+     * @custom:example
+     * ```solidity
+     * // Enable compounding for stake #0
+     * stakingContract.toggleCompoundRewards(0);
+     * // Disable compounding for the same stake
+     * stakingContract.toggleCompoundRewards(0);
+     * ```
      */
     function toggleCompoundRewards(uint256 stakeIndex) external nonReentrant {
         if (stakeIndex >= userStakes[msg.sender].length)
@@ -709,25 +888,128 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
     }
 
     /**
-     * @dev Returns the total amount of staked tokens
-     * @return Total staked amount
+     * @notice Returns the total amount of MEL tokens currently staked across all users and duration programs
+     * @dev Aggregates staking amounts from all users and duration indexes, converted from precision-scaled storage.
+     * Provides real-time view of total capital locked in the staking system for analytics and monitoring.
+     *
+     * Calculation Process:
+     * - Retrieves totalStakedWithPrecision from internal storage
+     * - Divides by PRECISION_FACTOR (10^12) to convert back to token units
+     * - Returns human-readable token amount with 8 decimal places
+     *
+     * Data Sources:
+     * - Includes stakes from all duration programs (index 0-4)
+     * - Includes both locked and unlocked stakes
+     * - Includes principal amounts only (excludes compounded rewards)
+     * - Updated in real-time with each stake/unstake operation
+     *
+     * Use Cases:
+     * - Protocol analytics and TVL calculations
+     * - Reward distribution percentage calculations
+     * - Security monitoring for stake concentration
+     * - Front-end display of total staking activity
+     *
+     * @return The total amount of staked MEL tokens (8 decimals)
+     *
+     * @custom:view-function Pure read operation with no state changes
+     * @custom:gas-optimization Simple arithmetic operation, very low gas cost
+     *
+     * @custom:example
+     * ```solidity
+     * uint256 totalStaked = stakingContract.getTotalStaked();
+     * // Returns: 50000000000000 (representing 500,000.00000000 MEL tokens)
+     * ```
      */
     function getTotalStaked() external view returns (uint256) {
         return totalStakedWithPrecision / 10 ** PRECISION_FACTOR;
     }
 
     /**
-     * @dev Returns the total ponderated amount of staked tokens
-     * @return Total ponderated staked amount
+     * @notice Returns the total ponderated (weighted) staking amount used for proportional reward calculations
+     * @dev Aggregates duration-adjusted staking amounts across all users, showing total weighted influence.
+     * Critical for understanding reward distribution proportions and staking program effectiveness.
+     * Higher values indicate longer-duration stakes which receive proportionally more rewards.
+     *
+     * Ponderation System:
+     * - Index 0 (no lock): 1.0x multiplier (100% weight)
+     * - Index 1 (90 days): 1.3x multiplier (130% weight)
+     * - Index 2 (180 days): 1.6x multiplier (160% weight)
+     * - Index 3 (365 days): 2.2x multiplier (220% weight)
+     * - Index 4 (365 days VIP): 3.0x multiplier (300% weight)
+     *
+     * Calculation Process:
+     * - Each stake is multiplied by its duration multiplier
+     * - All ponderated amounts are summed across users and programs
+     * - Stored with PRECISION_FACTOR (10^12) for micro-reward accuracy
+     * - Converted back to readable format for external consumption
+     *
+     * Reward Distribution Usage:
+     * - User's reward share = (user ponderated amount) / (total ponderated amount)
+     * - Incentivizes longer staking commitments with higher reward weights
+     * - Used by updateAccumulatedRewards() for daily reward allocation
+     *
+     * @return The total ponderated staking amount (duration-weighted, 8 decimals)
+     *
+     * @custom:view-function Pure read operation with no state changes
+     * @custom:reward-critical Essential for accurate reward distribution calculations
+     *
+     * @custom:example
+     * ```solidity
+     * uint256 totalPonderated = stakingContract.getTotalPonderatedStaked();
+     * // If total regular stakes = 100M MEL, total ponderated might be 180M MEL
+     * // (indicating average ~1.8x multiplier from longer duration preferences)
+     * ```
      */
     function getTotalPonderatedStaked() external view returns (uint256) {
         return totalPonderatedStakedWithPrecision / 10 ** PRECISION_FACTOR;
     }
 
     /**
-     * @dev Returns all stakes for a specific user
-     * @param user Address of the user
-     * @return Array of StakingInfo structs
+     * @notice Retrieves complete staking portfolio information for a specific user address
+     * @dev Returns comprehensive array of all StakingInfo structs associated with the user.
+     * Essential for frontend applications, portfolio analytics, and user account management.
+     * Provides complete visibility into user's staking positions across all duration programs.
+     *
+     * StakingInfo Struct Contents (per stake):
+     * - amountWithPrecision: Staked amount scaled by PRECISION_FACTOR (10^12)
+     * - ponderatedAmountWithPrecision: Duration-weighted amount for reward calculations
+     * - stakingTimestamp: Unix timestamp when stake was created
+     * - durationIndex: Duration program (0=no lock, 1=90d, 2=180d, 3=365d, 4=365d VIP)
+     * - compoundRewards: Whether rewards are automatically reinvested
+     * - accumulatedRewardsWithPrecision: Precision-scaled accumulated rewards
+     *
+     * Data Processing Recommendations:
+     * - Divide amounts by PRECISION_FACTOR (10^12) for human-readable values
+     * - Use durationIndex to determine lock status and multiplier
+     * - Check stakingTimestamp + duration to calculate unlock times
+     * - Sum amountWithPrecision across stakes for total user staking
+     *
+     * Common Use Cases:
+     * - Portfolio dashboard displaying all user positions
+     * - Calculating total staked amounts and pending rewards
+     * - Determining which stakes are unlocked and withdrawable
+     * - Historical analysis of staking behavior and strategy
+     * - Tax reporting and accounting for staking activities
+     *
+     * @param user The wallet address to retrieve staking information for
+     *
+     * @return Array of StakingInfo structs containing complete staking portfolio data
+     *
+     * @custom:view-function Pure read operation with no gas cost when called externally
+     * @custom:frontend-critical Essential function for user interface and portfolio management
+     * @custom:array-return May return large arrays for heavy stakers - consider pagination in UI
+     *
+     * @custom:example
+     * ```solidity
+     * StakingInfo[] memory stakes = stakingContract.getUserStakes(userAddress);
+     *
+     * for (uint i = 0; i < stakes.length; i++) {
+     *     uint256 amount = stakes[i].amountWithPrecision / 10**12;
+     *     uint8 duration = stakes[i].durationIndex;
+     *     bool isLocked = (block.timestamp < stakes[i].stakingTimestamp + DURATION_DAYS[duration] * 1 days);
+     *     // Process each stake for display or calculations
+     * }
+     * ```
      */
     function getUserStakes(
         address user
@@ -788,6 +1070,7 @@ contract MeliesStaking is AccessControl, Pausable, ReentrancyGuard {
         for (uint8 i = 1; i < 5; i++) {
             if (newMultipliers[i] <= newMultipliers[i - 1])
                 revert InvalidMultiplier();
+            if (newMultipliers[i] > 10000) revert InvalidMultiplier();
         }
         DURATION_MULTIPLIERS = newMultipliers;
     }

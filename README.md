@@ -215,20 +215,56 @@ forge build
 forge test
 ```
 
-### Testing
+## Deployment
 
-```bash
-# Run all tests
-forge test
+### Pre-Deployment Setup
 
-# Run tests with coverage
-forge coverage
+Before deploying the contracts, you need to configure several important settings:
 
-# Run specific test file
-forge test --match-contract MeliesTest
+#### 1. Distribution Addresses Configuration
+
+⚠️ **IMPORTANT**: The following addresses in the deployment scripts need to be updated with actual addresses before deployment:
+
+**In `script/Melies.s.sol` (Mainnet):**
+
+```solidity
+// These are currently set to address(0) and MUST be updated
+address constant COMMUNITY_ADDRESS = address(0); // Replace with actual address
+address constant TREASURY_ADDRESS = address(0);  // Replace with actual address
+address constant PARTNERS_ADDRESS = address(0);  // Replace with actual address
+address constant TEAM_ADDRESS = address(0);      // Replace with actual address
+address constant LIQUIDITY_ADDRESS = address(0); // Replace with actual address
+address constant AI_SYSTEMS_ADDRESS = address(0);// Replace with actual address
 ```
 
-### Deployment
+**In `script/MeliesTestnet.s.sol` (Testnet):**
+
+```solidity
+// Update these with your testnet addresses for testing
+address constant COMMUNITY_ADDRESS = 0x1111111111111111111111111111111111111111;
+// ... etc
+```
+
+#### 2. Environment Variables Setup
+
+Create a `.env` file in the project root with the following variables:
+
+```bash
+# Private key for deployment (without 0x prefix)
+PRIVATE_KEY=your_deployer_private_key_here
+
+# Etherscan API key for contract verification
+ETHERSCAN_API_KEY=your_etherscan_api_key_here
+```
+
+#### 3. Network Configuration
+
+The RPC URLs are configured in the `Makefile`. Update them if needed:
+
+-   `SEPOLIA_RPC_URL` - Base Sepolia testnet RPC
+-   `MAINNET_RPC_URL` - Base mainnet RPC
+
+### Deployment Commands
 
 ```bash
 # Deploy to local network
@@ -237,6 +273,161 @@ forge script script/Deploy.s.sol --rpc-url http://localhost:8545 --broadcast
 # Deploy to testnet
 forge script script/Deploy.s.sol --rpc-url $TESTNET_RPC --broadcast --verify
 ```
+
+### Testing
+
+```bash
+# Run all tests
+make test
+
+# Run tests with gas report
+make test-with-gas
+
+# Run specific test file
+forge test --match-contract MeliesTest
+
+# Check test coverage (note: may require compilation fixes)
+forge coverage
+```
+
+### Available Make Commands
+
+```bash
+make install         # Install dependencies
+make build          # Compile contracts
+make test           # Run all tests
+make deploy-sepolia # Deploy to Base Sepolia testnet
+make deploy-mainnet # Deploy to Base mainnet
+make clean          # Clean build artifacts
+make format         # Format code
+make help           # Show available commands
+```
+
+## NatSpec Documentation Standards
+
+### Current Status
+
+The contracts have basic documentation but need comprehensive NatSpec tags for audit readiness. Here's the required documentation standard:
+
+### Required NatSpec Tags
+
+Every public/external function should include:
+
+````solidity
+/**
+ * @notice User-friendly description of what the function does
+ * @dev Technical details for developers (implementation notes, gas considerations, etc.)
+ *
+ * Requirements:
+ * - List all requirements/preconditions
+ * - Include access control requirements
+ * - Note any state changes
+ *
+ * @param paramName Description of parameter (include units, ranges, etc.)
+ * @param anotherParam Description of another parameter
+ *
+ * @return returnValue Description of return value (if any)
+ *
+ * @custom:security-note Any security-relevant information
+ * @custom:gas-note Gas consumption notes (if significant)
+ *
+ * Emits a {EventName} event.
+ *
+ * @custom:example
+ * ```solidity
+ * // Example usage code
+ * contract.function(param1, param2);
+ * ```
+ */
+````
+
+### Examples by Contract
+
+#### 1. Melies.sol (Token Contract)
+
+```solidity
+/**
+ * @notice Creates new MEL tokens and assigns them to a specified address
+ * @dev Creates `amount` tokens and assigns them to `to`, increasing the total supply.
+ * This function implements supply cap enforcement to prevent exceeding the maximum total supply.
+ *
+ * Requirements:
+ * - The caller must have the `MINTER_ROLE`
+ * - `to` cannot be the zero address
+ * - The total supply after minting must not exceed `maxTotalSupply`
+ *
+ * @param to The address that will receive the minted tokens
+ * @param amount The amount of tokens to mint (in wei, with 8 decimals)
+ *
+ * @custom:security-note This function enforces a hard cap on total supply to prevent inflation attacks
+ *
+ * Emits a {Transfer} event with `from` set to the zero address.
+ */
+function mint(address to, uint256 amount) public onlyRole(MINTER_ROLE)
+```
+
+#### 2. MeliesStaking.sol (Staking Contract)
+
+Functions needing comprehensive NatSpec:
+
+-   `stake()` - Add precision factor details, duration explanations
+-   `unstake()` - Add reward calculation details
+-   `earlyUnstake()` - Add burn percentage calculations
+-   `updateAccumulatedRewards()` - Add gas limit and batching details
+
+#### 3. MeliesICO.sol (ICO Contract)
+
+Functions needing comprehensive NatSpec:
+
+-   `buyWithEth()` - Add slippage protection details
+-   `buyWithUsdc()` - Add purchase limit explanations
+-   `addSaleRound()` - Add parameter validation details
+-   `endIco()` - Add refund mechanism explanations
+
+#### 4. MeliesTokenDistributor.sol (Distribution Contract)
+
+Functions needing comprehensive NatSpec:
+
+-   `claimTokens()` - Add vesting calculation details
+-   `claimAllTokensWithHaircut()` - Add haircut percentage calculations
+-   `addAllocation()` - Add TGE and vesting parameter details
+
+### Priority Functions for Documentation
+
+**High Priority (Auditor Focus Areas):**
+
+1. All token minting/burning functions
+2. Staking reward calculations
+3. ICO purchase mechanisms
+4. Token distribution and vesting logic
+5. Emergency/admin functions
+
+**Medium Priority:**
+
+1. View functions with complex calculations
+2. Internal helper functions
+3. Configuration functions
+
+### Documentation Generation
+
+After adding NatSpec tags, generate documentation:
+
+```bash
+# Generate documentation
+make docs
+
+# This creates documentation in docs/ folder
+```
+
+### Validation
+
+To ensure documentation quality:
+
+1. Every public/external function has `@notice`
+2. Complex functions have detailed `@dev` sections
+3. All parameters documented with units/ranges
+4. Security-relevant functions have `@custom:security-note`
+5. Example usage provided for key functions
 
 ## Interfaces
 

@@ -50,11 +50,49 @@ contract Melies is ERC20, ERC20Pausable, AccessControl, ERC20Permit {
     // ============ CONSTRUCTOR ============
 
     /**
-     * @dev Constructor that sets up the token with initial roles and metadata
-     * @param defaultAdmin Address to be granted the default admin role
+     * @notice Deploys the MEL token contract with specified admin and initializes core functionality
+     * @dev Constructor that sets up the ERC20 token with 8 decimals, pausable functionality,
+     * access control, and EIP-2612 permit support. Grants DEFAULT_ADMIN_ROLE to specified admin.
+     *
+     * Token Configuration:
+     * - Name: "Melies"
+     * - Symbol: "MEL"
+     * - Decimals: 8 (overridden from default 18)
+     * - Max Supply: 1,000,000,000 MEL (1 billion tokens)
+     * - Initial Supply: 0 (tokens minted as needed)
+     *
+     * Features Enabled:
+     * - ERC20 standard compliance with 8 decimal precision
+     * - Pausable transfers for emergency control
+     * - Role-based access control (ADMIN, PAUSER, MINTER, BURNER roles)
+     * - EIP-2612 permit functionality for gasless approvals
+     * - Supply cap enforcement to prevent inflation
+     *
+     * Access Control Setup:
+     * - DEFAULT_ADMIN_ROLE: Granted to defaultAdmin (can manage all other roles)
+     * - Other roles (PAUSER, MINTER, BURNER) must be granted separately by admin
      *
      * Requirements:
-     * - `defaultAdmin` cannot be the zero address
+     * - defaultAdmin cannot be the zero address (prevents bricking admin functions)
+     *
+     * @param defaultAdmin Address to receive DEFAULT_ADMIN_ROLE and manage other roles
+     *
+     * @custom:security-note Admin has full control over token functionality - use multisig
+     * @custom:precision-note Uses 8 decimals instead of standard 18 for better UI/UX
+     * @custom:gas-note Constructor cost includes role setup and multiple inheritance initialization
+     *
+     * No events emitted by constructor (OpenZeppelin handles role grant events).
+     *
+     * @custom:example
+     * ```solidity
+     * // Deploy with multisig as admin
+     * address multisig = 0x123...;
+     * Melies token = new Melies(multisig);
+     *
+     * // Admin can then grant operational roles
+     * token.grantRole(token.MINTER_ROLE(), stakingContract);
+     * token.grantRole(token.BURNER_ROLE(), distributorContract);
+     * ```
      */
     constructor(
         address defaultAdmin
@@ -66,45 +104,156 @@ contract Melies is ERC20, ERC20Pausable, AccessControl, ERC20Permit {
     // ============ PUBLIC FUNCTIONS ============
 
     /**
-     * @dev Overrides the decimals function to return 8 instead of the default 18
-     * @return 8 The number of decimals for the token
+     * @notice Returns the number of decimal places for MEL token precision
+     * @dev Overrides ERC20 default of 18 decimals to use 8 decimals for MEL tokens.
+     * This provides sufficient precision for financial calculations while maintaining
+     * compatibility with traditional financial systems and reducing gas costs.
+     *
+     * Precision Design Rationale:
+     * - 8 decimals matches traditional financial precision (like cents to dollars)
+     * - Enables micro-transactions while preventing dust amounts
+     * - Reduces gas costs compared to 18-decimal calculations
+     * - Maintains precision for reward calculations and staking operations
+     *
+     * Impact on Token Operations:
+     * - All token amounts are expressed with 8 decimal places
+     * - Minimum transferable amount: 0.00000001 MEL
+     * - Maximum supply: 1,000,000,000.00000000 MEL (1 billion tokens)
+     * - Frontend applications must account for 8-decimal display
+     *
+     * @return 8 The number of decimal places for MEL token
+     *
+     * @custom:standard-override Overrides ERC20 standard default of 18 decimals
+     * @custom:immutable This value is constant and cannot be changed after deployment
+     *
+     * @custom:example
+     * ```solidity
+     * uint8 melDecimals = melToken.decimals(); // Returns: 8
+     *
+     * // Token amount examples:
+     * // 1 MEL = 100000000 (1 * 10^8)
+     * // 0.5 MEL = 50000000 (0.5 * 10^8)
+     * // 1000.12345678 MEL = 100012345678 (1000.12345678 * 10^8)
+     * ```
      */
     function decimals() public pure override(ERC20) returns (uint8) {
         return 8;
     }
 
     /**
-     * @dev Pauses all token transfers
+     * @notice Temporarily halts all MEL token transfers and operations for emergency situations
+     * @dev Activates emergency pause mechanism that disables transfers, minting, and burning.
+     * Critical safety feature for responding to security incidents, smart contract vulnerabilities,
+     * or other emergency situations requiring immediate protocol suspension.
      *
-     * See {ERC20Pausable} and {Pausable-_pause}.
+     * Operations Affected When Paused:
+     * - All ERC20 transfers (transfer, transferFrom)
+     * - Token minting via mint() function
+     * - Token burning via burn() function
+     * - Any other pausable operations in connected contracts
+     *
+     * Operations NOT Affected:
+     * - View functions (balanceOf, totalSupply, etc.)
+     * - Administrative functions (role management)
+     * - Contract deployment and initialization
+     *
+     * Emergency Use Cases:
+     * - Smart contract vulnerabilities discovered
+     * - Suspicious trading activity or market manipulation
+     * - Bridge or oracle compromise affecting token security
+     * - Regulatory compliance requirements
+     * - Planned protocol upgrades requiring temporary suspension
      *
      * Requirements:
-     * - The caller must have the `PAUSER_ROLE`
+     * - Only callable by addresses with PAUSER_ROLE
+     * - Contract must not already be paused
+     * - Should be used sparingly and only for legitimate emergencies
      *
-     * Emits a {Paused} event.
+     * @custom:security-critical Emergency function for protocol safety
+     * @custom:reversible Can be undone via unpause() function with same role
+     * @custom:transparency All pause events are logged for public transparency
+     *
+     * State Changes:
+     * - Sets internal paused state to true
+     * - Blocks all pausable operations until unpause is called
+     *
+     * Emits:
+     * - {Paused} event with the address that triggered the pause
+     *
+     * @custom:example
+     * ```solidity
+     * // Emergency pause due to security incident
+     * melToken.pause();
+     * // All transfers now blocked until unpause() is called
+     * ```
      */
     function pause() public onlyRole(PAUSER_ROLE) {
         _pause();
     }
 
     /**
-     * @dev Unpauses all token transfers
+     * @notice Restores normal MEL token operations after emergency pause has been resolved
+     * @dev Deactivates emergency pause mechanism, re-enabling all previously blocked operations.
+     * Critical recovery function for restoring protocol functionality after security incidents
+     * or maintenance periods have been successfully addressed.
      *
-     * See {ERC20Pausable} and {Pausable-_unpause}.
+     * Operations Restored When Unpaused:
+     * - All ERC20 transfers (transfer, transferFrom) resume normal operation
+     * - Token minting via mint() function becomes available again
+     * - Token burning via burn() function becomes available again
+     * - Connected contract operations dependent on MEL transfers resume
+     *
+     * Recovery Process:
+     * 1. Verify that the underlying issue/emergency has been resolved
+     * 2. Confirm all security measures are in place
+     * 3. Execute unpause to restore normal operations
+     * 4. Monitor for any unexpected behavior post-unpause
+     *
+     * Post-Unpause Monitoring:
+     * - All previously paused operations immediately become available
+     * - No gradual restoration period (instant full functionality)
+     * - Users can immediately resume normal token interactions
+     * - Connected protocols can resume dependent operations
+     *
+     * Use Cases for Unpausing:
+     * - Security vulnerability has been patched and verified safe
+     * - Market manipulation incident has been resolved
+     * - Regulatory compliance issues have been addressed
+     * - Planned maintenance or upgrade has completed successfully
+     * - False alarm pause needs to be quickly reversed
      *
      * Requirements:
-     * - The caller must have the `PAUSER_ROLE`
+     * - Only callable by addresses with PAUSER_ROLE
+     * - Contract must currently be in paused state
+     * - Should only be used after confirming safety to resume operations
      *
-     * Emits an {Unpaused} event.
+     * @custom:security-critical Recovery function requiring careful verification before use
+     * @custom:immediate-effect All operations resume instantly upon execution
+     * @custom:monitoring-required Post-unpause monitoring recommended for safety
+     *
+     * State Changes:
+     * - Sets internal paused state to false
+     * - Immediately re-enables all pausable operations
+     * - Restores full protocol functionality
+     *
+     * Emits:
+     * - {Unpaused} event with the address that triggered the unpause
+     *
+     * @custom:example
+     * ```solidity
+     * // After confirming security issue is resolved
+     * melToken.unpause();
+     * // All transfers and operations immediately available again
+     * ```
      */
     function unpause() public onlyRole(PAUSER_ROLE) {
         _unpause();
     }
 
     /**
-     * @dev Creates `amount` tokens and assigns them to `to`, increasing the total supply
-     *
-     * See {ERC20-_mint}.
+     * @notice Creates new MEL tokens and assigns them to a specified address
+     * @dev Creates `amount` tokens and assigns them to `to`, increasing the total supply.
+     * This function implements supply cap enforcement to prevent exceeding the maximum total supply.
      *
      * Requirements:
      * - The caller must have the `MINTER_ROLE`
@@ -112,7 +261,9 @@ contract Melies is ERC20, ERC20Pausable, AccessControl, ERC20Permit {
      * - The total supply after minting must not exceed `maxTotalSupply`
      *
      * @param to The address that will receive the minted tokens
-     * @param amount The amount of tokens to mint
+     * @param amount The amount of tokens to mint (in wei, with 8 decimals)
+     *
+     * @custom:security-note This function enforces a hard cap on total supply to prevent inflation attacks
      *
      * Emits a {Transfer} event with `from` set to the zero address.
      */
@@ -124,9 +275,9 @@ contract Melies is ERC20, ERC20Pausable, AccessControl, ERC20Permit {
     }
 
     /**
-     * @dev Destroys `amount` tokens from the specified account
-     *
-     * See {ERC20-_burn}.
+     * @notice Destroys MEL tokens from a specified account
+     * @dev Destroys `amount` tokens from the specified account, reducing the total supply.
+     * This function permanently removes tokens from circulation.
      *
      * Requirements:
      * - The caller must have the `BURNER_ROLE`
@@ -134,7 +285,9 @@ contract Melies is ERC20, ERC20Pausable, AccessControl, ERC20Permit {
      * - `from` must have at least `amount` tokens
      *
      * @param from The address from which to burn tokens
-     * @param amount The amount of tokens to burn
+     * @param amount The amount of tokens to burn (in wei, with 8 decimals)
+     *
+     * @custom:security-note Only authorized contracts/addresses with BURNER_ROLE can burn tokens
      *
      * Emits a {Transfer} event with `to` set to the zero address.
      */

@@ -20,14 +20,11 @@ contract MeliesTest is Test {
     // Custom error selectors for testing
     bytes4 private constant UNAUTHORIZED_SELECTOR =
         bytes4(keccak256("AccessControlUnauthorizedAccount(address,bytes32)"));
-    bytes4 private constant ENFORCED_PAUSE_SELECTOR =
-        bytes4(keccak256("EnforcedPause()"));
+    bytes4 private constant ENFORCED_PAUSE_SELECTOR = bytes4(keccak256("EnforcedPause()"));
     bytes4 private constant INSUFFICIENT_BALANCE_SELECTOR =
         bytes4(keccak256("ERC20InsufficientBalance(address,uint256,uint256)"));
     bytes32 private constant PERMIT_TYPEHASH =
-        keccak256(
-            "Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"
-        );
+        keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
 
     // =============================================================================
     // STATE VARIABLES
@@ -80,9 +77,7 @@ contract MeliesTest is Test {
     }
 
     function test_RoleInitialization() public {
-        assertTrue(
-            meliesToken.hasRole(meliesToken.DEFAULT_ADMIN_ROLE(), admin)
-        );
+        assertTrue(meliesToken.hasRole(meliesToken.DEFAULT_ADMIN_ROLE(), admin));
         assertTrue(meliesToken.hasRole(meliesToken.PAUSER_ROLE(), pauser));
         assertTrue(meliesToken.hasRole(meliesToken.MINTER_ROLE(), minter));
         assertTrue(meliesToken.hasRole(meliesToken.BURNER_ROLE(), burner));
@@ -144,16 +139,12 @@ contract MeliesTest is Test {
         // Grant admin role
         vm.prank(admin);
         meliesToken.grantRole(meliesToken.DEFAULT_ADMIN_ROLE(), newAdmin);
-        assertTrue(
-            meliesToken.hasRole(meliesToken.DEFAULT_ADMIN_ROLE(), newAdmin)
-        );
+        assertTrue(meliesToken.hasRole(meliesToken.DEFAULT_ADMIN_ROLE(), newAdmin));
 
         // New admin can revoke original admin
         vm.prank(newAdmin);
         meliesToken.revokeRole(meliesToken.DEFAULT_ADMIN_ROLE(), admin);
-        assertFalse(
-            meliesToken.hasRole(meliesToken.DEFAULT_ADMIN_ROLE(), admin)
-        );
+        assertFalse(meliesToken.hasRole(meliesToken.DEFAULT_ADMIN_ROLE(), admin));
     }
 
     // =============================================================================
@@ -170,12 +161,7 @@ contract MeliesTest is Test {
 
     function test_MintToZeroAddress() public {
         vm.prank(minter);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IERC20Errors.ERC20InvalidReceiver.selector,
-                address(0)
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(IERC20Errors.ERC20InvalidReceiver.selector, address(0)));
         meliesToken.mint(address(0), 1000);
     }
 
@@ -188,25 +174,13 @@ contract MeliesTest is Test {
     }
 
     function test_MintUnauthorized() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                UNAUTHORIZED_SELECTOR,
-                user,
-                meliesToken.MINTER_ROLE()
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(UNAUTHORIZED_SELECTOR, user, meliesToken.MINTER_ROLE()));
         vm.prank(user);
         meliesToken.mint(user, 1000);
     }
 
     function test_MintExceedingMaxSupply() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                Melies.ERC20MarketCapExceeded.selector,
-                MAX_SUPPLY + 1,
-                0
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(Melies.ERC20MarketCapExceeded.selector, MAX_SUPPLY + 1, 0));
         vm.prank(minter);
         meliesToken.mint(user, MAX_SUPPLY + 1);
     }
@@ -239,10 +213,7 @@ contract MeliesTest is Test {
         assertEq(meliesToken.balanceOf(user), smallAmount);
         assertEq(meliesToken.balanceOf(user2), mediumAmount);
         assertEq(meliesToken.balanceOf(user3), largeAmount);
-        assertEq(
-            meliesToken.totalSupply(),
-            smallAmount + mediumAmount + largeAmount
-        );
+        assertEq(meliesToken.totalSupply(), smallAmount + mediumAmount + largeAmount);
     }
 
     // =============================================================================
@@ -262,12 +233,7 @@ contract MeliesTest is Test {
 
     function test_BurnFromZeroAddress() public {
         vm.prank(burner);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IERC20Errors.ERC20InvalidSender.selector,
-                address(0)
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(IERC20Errors.ERC20InvalidSender.selector, address(0)));
         meliesToken.burn(address(0), 500);
     }
 
@@ -286,13 +252,7 @@ contract MeliesTest is Test {
         vm.prank(minter);
         meliesToken.mint(user, 1000);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                UNAUTHORIZED_SELECTOR,
-                user,
-                meliesToken.BURNER_ROLE()
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(UNAUTHORIZED_SELECTOR, user, meliesToken.BURNER_ROLE()));
         vm.prank(user);
         meliesToken.burn(user, 500);
     }
@@ -302,14 +262,7 @@ contract MeliesTest is Test {
         meliesToken.mint(user, 1000);
 
         vm.prank(burner);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                INSUFFICIENT_BALANCE_SELECTOR,
-                user,
-                1000,
-                1001
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(INSUFFICIENT_BALANCE_SELECTOR, user, 1000, 1001));
         meliesToken.burn(user, 1001);
     }
 
@@ -368,12 +321,7 @@ contract MeliesTest is Test {
         meliesToken.mint(user, 1000);
 
         vm.prank(user);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IERC20Errors.ERC20InvalidReceiver.selector,
-                address(0)
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(IERC20Errors.ERC20InvalidReceiver.selector, address(0)));
         meliesToken.transfer(address(0), 500);
     }
 
@@ -382,14 +330,7 @@ contract MeliesTest is Test {
         meliesToken.mint(user, 1000);
 
         vm.prank(user);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                INSUFFICIENT_BALANCE_SELECTOR,
-                user,
-                1000,
-                1001
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(INSUFFICIENT_BALANCE_SELECTOR, user, 1000, 1001));
         meliesToken.transfer(user2, 1001);
     }
 
@@ -427,12 +368,7 @@ contract MeliesTest is Test {
 
     function test_ApproveZeroAddress() public {
         vm.prank(user);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IERC20Errors.ERC20InvalidSpender.selector,
-                address(0)
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(IERC20Errors.ERC20InvalidSpender.selector, address(0)));
         meliesToken.approve(address(0), 100);
     }
 
@@ -464,14 +400,7 @@ contract MeliesTest is Test {
         meliesToken.approve(user2, 500);
 
         vm.prank(user2);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IERC20Errors.ERC20InsufficientAllowance.selector,
-                user2,
-                500,
-                501
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(IERC20Errors.ERC20InsufficientAllowance.selector, user2, 500, 501));
         meliesToken.transferFrom(user, user3, 501);
     }
 
@@ -480,14 +409,7 @@ contract MeliesTest is Test {
         meliesToken.mint(user, 1000);
 
         vm.prank(user2);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IERC20Errors.ERC20InsufficientAllowance.selector,
-                user2,
-                0,
-                100
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(IERC20Errors.ERC20InsufficientAllowance.selector, user2, 0, 100));
         meliesToken.transferFrom(user, user3, 100);
     }
 
@@ -521,13 +443,7 @@ contract MeliesTest is Test {
     }
 
     function test_PauseUnauthorized() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                UNAUTHORIZED_SELECTOR,
-                user,
-                meliesToken.PAUSER_ROLE()
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(UNAUTHORIZED_SELECTOR, user, meliesToken.PAUSER_ROLE()));
         vm.prank(user);
         meliesToken.pause();
     }
@@ -536,13 +452,7 @@ contract MeliesTest is Test {
         vm.prank(pauser);
         meliesToken.pause();
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                UNAUTHORIZED_SELECTOR,
-                user,
-                meliesToken.PAUSER_ROLE()
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(UNAUTHORIZED_SELECTOR, user, meliesToken.PAUSER_ROLE()));
         vm.prank(user);
         meliesToken.unpause();
     }
@@ -626,16 +536,7 @@ contract MeliesTest is Test {
             abi.encodePacked(
                 "\x19\x01",
                 meliesToken.DOMAIN_SEPARATOR(),
-                keccak256(
-                    abi.encode(
-                        PERMIT_TYPEHASH,
-                        owner,
-                        spender,
-                        value,
-                        meliesToken.nonces(owner),
-                        deadline
-                    )
-                )
+                keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, value, meliesToken.nonces(owner), deadline))
             )
         );
 
@@ -660,16 +561,7 @@ contract MeliesTest is Test {
             abi.encodePacked(
                 "\x19\x01",
                 meliesToken.DOMAIN_SEPARATOR(),
-                keccak256(
-                    abi.encode(
-                        PERMIT_TYPEHASH,
-                        owner,
-                        spender,
-                        value,
-                        meliesToken.nonces(owner),
-                        deadline
-                    )
-                )
+                keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, value, meliesToken.nonces(owner), deadline))
             )
         );
 
@@ -692,16 +584,7 @@ contract MeliesTest is Test {
             abi.encodePacked(
                 "\x19\x01",
                 meliesToken.DOMAIN_SEPARATOR(),
-                keccak256(
-                    abi.encode(
-                        PERMIT_TYPEHASH,
-                        owner,
-                        spender,
-                        value,
-                        meliesToken.nonces(owner),
-                        deadline
-                    )
-                )
+                keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, value, meliesToken.nonces(owner), deadline))
             )
         );
 
@@ -725,26 +608,12 @@ contract MeliesTest is Test {
             abi.encodePacked(
                 "\x19\x01",
                 meliesToken.DOMAIN_SEPARATOR(),
-                keccak256(
-                    abi.encode(
-                        PERMIT_TYPEHASH,
-                        owner,
-                        address(0),
-                        value,
-                        meliesToken.nonces(owner),
-                        deadline
-                    )
-                )
+                keccak256(abi.encode(PERMIT_TYPEHASH, owner, address(0), value, meliesToken.nonces(owner), deadline))
             )
         );
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, digest);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IERC20Errors.ERC20InvalidSpender.selector,
-                address(0)
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(IERC20Errors.ERC20InvalidSpender.selector, address(0)));
         meliesToken.permit(owner, address(0), value, deadline, v, r, s);
     }
 
@@ -762,16 +631,7 @@ contract MeliesTest is Test {
             abi.encodePacked(
                 "\x19\x01",
                 meliesToken.DOMAIN_SEPARATOR(),
-                keccak256(
-                    abi.encode(
-                        PERMIT_TYPEHASH,
-                        owner,
-                        spender,
-                        value,
-                        meliesToken.nonces(owner),
-                        deadline
-                    )
-                )
+                keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, value, meliesToken.nonces(owner), deadline))
             )
         );
 
@@ -796,16 +656,7 @@ contract MeliesTest is Test {
             abi.encodePacked(
                 "\x19\x01",
                 meliesToken.DOMAIN_SEPARATOR(),
-                keccak256(
-                    abi.encode(
-                        PERMIT_TYPEHASH,
-                        owner,
-                        spender,
-                        value,
-                        meliesToken.nonces(owner),
-                        deadline
-                    )
-                )
+                keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, value, meliesToken.nonces(owner), deadline))
             )
         );
 
@@ -875,9 +726,7 @@ contract MeliesTest is Test {
     function test_DomainSeparator() public {
         bytes32 expectedDomainSeparator = keccak256(
             abi.encode(
-                keccak256(
-                    "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
-                ),
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
                 keccak256(bytes("Melies")),
                 keccak256(bytes("1")),
                 block.chainid,
@@ -951,16 +800,7 @@ contract MeliesTest is Test {
             abi.encodePacked(
                 "\x19\x01",
                 meliesToken.DOMAIN_SEPARATOR(),
-                keccak256(
-                    abi.encode(
-                        PERMIT_TYPEHASH,
-                        owner,
-                        spender,
-                        value,
-                        meliesToken.nonces(owner),
-                        deadline
-                    )
-                )
+                keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, value, meliesToken.nonces(owner), deadline))
             )
         );
 
@@ -1022,9 +862,7 @@ contract MeliesTest is Test {
     }
 
     function test_ContractAddressOperations() public {
-        address contractAddress = address(
-            0x1234567890123456789012345678901234567890
-        );
+        address contractAddress = address(0x1234567890123456789012345678901234567890);
 
         // Test minting to contract address
         vm.prank(minter);
@@ -1075,13 +913,7 @@ contract MeliesTest is Test {
         meliesToken.revokeRole(meliesToken.PAUSER_ROLE(), user);
 
         // User can no longer unpause
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                UNAUTHORIZED_SELECTOR,
-                user,
-                meliesToken.PAUSER_ROLE()
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(UNAUTHORIZED_SELECTOR, user, meliesToken.PAUSER_ROLE()));
         vm.prank(user);
         meliesToken.unpause();
 
@@ -1101,13 +933,7 @@ contract MeliesTest is Test {
         meliesToken.mint(user, currentSupply);
 
         vm.prank(minter);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                Melies.ERC20MarketCapExceeded.selector,
-                attemptToMint,
-                currentSupply
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(Melies.ERC20MarketCapExceeded.selector, attemptToMint, currentSupply));
         meliesToken.mint(user2, attemptToMint);
     }
 

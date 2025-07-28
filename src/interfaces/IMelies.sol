@@ -71,10 +71,7 @@ interface IMelies {
      * @param spender The address that can spend the tokens
      * @return The amount of tokens the spender is allowed to spend
      */
-    function allowance(
-        address owner,
-        address spender
-    ) external view returns (uint256);
+    function allowance(address owner, address spender) external view returns (uint256);
 
     /**
      * @dev Approves a spender to spend tokens on behalf of the caller
@@ -91,11 +88,7 @@ interface IMelies {
      * @param amount The amount of tokens to transfer
      * @return True if the transfer was successful
      */
-    function transferFrom(
-        address from,
-        address to,
-        uint256 amount
-    ) external returns (bool);
+    function transferFrom(address from, address to, uint256 amount) external returns (bool);
 
     /**
      * @dev Pauses all token transfers
@@ -159,10 +152,7 @@ interface IMelies {
      * @param account The account to check
      * @return True if the account has the role
      */
-    function hasRole(
-        bytes32 role,
-        address account
-    ) external view returns (bool);
+    function hasRole(bytes32 role, address account) external view returns (bool);
 
     /**
      * @dev Returns the admin role that controls the specified role

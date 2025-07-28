@@ -17,19 +17,12 @@ contract MockERC20 is ERC20 {
         shouldRevert = _shouldRevert;
     }
 
-    function transfer(
-        address to,
-        uint256 amount
-    ) public virtual override returns (bool) {
+    function transfer(address to, uint256 amount) public virtual override returns (bool) {
         if (shouldRevert) revert("MockERC20: revert");
         return super.transfer(to, amount);
     }
 
-    function transferFrom(
-        address from,
-        address to,
-        uint256 amount
-    ) public virtual override returns (bool) {
+    function transferFrom(address from, address to, uint256 amount) public virtual override returns (bool) {
         if (shouldRevert) revert("MockERC20: revert");
         return super.transferFrom(from, to, amount);
     }

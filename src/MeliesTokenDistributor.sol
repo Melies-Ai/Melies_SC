@@ -156,8 +156,9 @@ contract MeliesTokenDistributor is AccessControl, ReentrancyGuard {
         uint256 _tgeTimestamp
     ) external onlyRole(ADMIN_ROLE) {
         if (tgeTimestampSet) revert TgeTimestampAlreadySet();
-        if (_tgeTimestamp == 0 || _tgeTimestamp < block.timestamp)
+        if (_tgeTimestamp == 0 || _tgeTimestamp < block.timestamp) {
             revert InvalidStartTime();
+        }
 
         tgeTimestamp = _tgeTimestamp;
         tgeTimestampSet = true;
@@ -281,9 +282,48 @@ contract MeliesTokenDistributor is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev Claims vested tokens for a specific allocation (normal vesting schedule, no haircut)
-     * @param allocationIndex Index of the allocation
-     * @param isRoundAllocation Whether this is a round allocation (true) or token allocation (false)
+     * @notice Claims vested MEL tokens according to normal vesting schedule without penalties
+     * @dev Calculates and transfers claimable tokens based on time elapsed since TGE and vesting parameters.
+     * Supports both token allocations (team, treasury, etc.) and round allocations (ICO investors).
+     * Uses linear vesting after cliff period with TGE release for immediate claiming.
+     *
+     * Vesting Calculation Process:
+     * 1. Check if TGE has occurred and cliff period has passed
+     * 2. Calculate TGE amount (if not already claimed)
+     * 3. Calculate linear vesting amount based on months elapsed
+     * 4. Subtract already claimed amount to get claimable tokens
+     * 5. Mint and transfer claimable tokens to beneficiary
+     * 6. Update allocation's claimed amount and last claim timestamp
+     *
+     * Allocation Types:
+     * - Token Allocations: Team (12m cliff, 20m vest), Treasury (48m vest), etc.
+     * - Round Allocations: Seed (12m vest), Private Sale (10m vest), Public Sale (8m vest)
+     *
+     * Requirements:
+     * - Caller must be the allocation beneficiary
+     * - Allocation index must be valid
+     * - TGE timestamp must be set (unless bypassTgeRestriction enabled)
+     * - Must have claimable tokens available (> 0)
+     * - If before TGE, only allocations with bypassTgeRestriction can claim
+     * - Must wait for cliff period to pass before claiming vested tokens
+     *
+     * @param allocationIndex Index of the user's allocation (0-based array index)
+     * @param isRoundAllocation True for ICO round allocations, false for token allocations
+     *
+     * @custom:security-note Uses nonReentrant guard and validates beneficiary ownership
+     * @custom:precision-note TGE percentages in basis points (10000 = 100%)
+     * @custom:gas-note Mints tokens on-demand to preserve gas efficiency
+     *
+     * Emits a {TokensClaimed} event with beneficiary address, claimed amount, and allocation name.
+     *
+     * @custom:example
+     * ```solidity
+     * // Claim from token allocation (e.g., team allocation at index 3)
+     * distributor.claimTokens(3, false);
+     *
+     * // Claim from ICO round allocation (e.g., seed round at index 0)
+     * distributor.claimTokens(0, true);
+     * ```
      */
     function claimTokens(
         uint256 allocationIndex,
@@ -314,9 +354,60 @@ contract MeliesTokenDistributor is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev Claims all tokens (including unvested) with haircut penalty for early claiming
-     * @param allocationIndex Index of the allocation
-     * @param isRoundAllocation Whether this is a round allocation (true) or token allocation (false)
+     * @notice Claims all remaining tokens immediately with progressive burn penalty for early access
+     * @dev Allows immediate claiming of all unvested tokens by applying time-based haircut penalties.
+     * Only applicable to ICO round allocations (Seed, Private Sale, Public Sale) with specific penalty schedules.
+     * Non-ICO allocations (Team, Treasury, etc.) have no haircut penalties.
+     *
+     * Haircut Penalty Schedule by Allocation Type:
+     * - Seed Round: 90% at TGE → 0% at 8 months (linear decrease)
+     * - Private Sale: 90% at TGE → 0% at 10 months (linear decrease)
+     * - Public Sale: 90% at TGE → 0% at 11 months (linear decrease)
+     * - Other Allocations: 0% penalty (no haircut applied)
+     *
+     * Process:
+     * 1. Calculate total remaining tokens (total - already claimed)
+     * 2. Determine months elapsed since TGE for penalty calculation
+     * 3. Apply allocation-specific haircut percentage based on time elapsed
+     * 4. Mint penalty amount to contract, then burn it (for tracking)
+     * 5. Mint net amount (remaining tokens - penalty) to beneficiary
+     * 6. Mark allocation as fully claimed
+     * 7. Update last claim timestamp
+     *
+     * Penalty Calculation Examples:
+     * - Seed at TGE (0 months): 90% penalty → user gets 10% of remaining tokens
+     * - Seed at 4 months: 45% penalty → user gets 55% of remaining tokens
+     * - Private Sale at 5 months: 45% penalty → user gets 55% of remaining tokens
+     * - Public Sale at 6 months: ~45% penalty → user gets ~55% of remaining tokens
+     *
+     * Requirements:
+     * - Caller must be the allocation beneficiary
+     * - Allocation index must be valid
+     * - TGE timestamp must be set
+     * - Must be after TGE (cannot claim with haircut before TGE)
+     * - Must have remaining tokens to claim (> 0)
+     *
+     * @param allocationIndex Index of the user's allocation (0-based array index)
+     * @param isRoundAllocation True for ICO round allocations, false for token allocations
+     *
+     * @custom:security-note Haircut mechanism prevents ICO gaming while allowing liquidity access
+     * @custom:precision-note Haircut percentages calculated in basis points (10000 = 100%)
+     * @custom:gas-note Burns penalty tokens by minting then burning for accurate supply tracking
+     *
+     * Emits a {TokensClaimed} event with beneficiary, net amount claimed, and allocation name.
+     * Emits a {TokensBurned} event with beneficiary, burned amount, allocation name, and haircut percentage.
+     *
+     * @custom:example
+     * ```solidity
+     * // Claim all seed tokens after 2 months (high penalty)
+     * distributor.claimAllTokensWithHaircut(0, true);
+     *
+     * // Claim all private sale tokens after 8 months (low penalty)
+     * distributor.claimAllTokensWithHaircut(1, true);
+     *
+     * // Claim team tokens (no penalty for non-ICO allocations)
+     * distributor.claimAllTokensWithHaircut(3, false);
+     * ```
      */
     function claimAllTokensWithHaircut(
         uint256 allocationIndex,
@@ -528,8 +619,11 @@ contract MeliesTokenDistributor is AccessControl, ReentrancyGuard {
         uint256 tgeReleasePercentage,
         bool bypassTgeRestriction
     ) public {
-        if (!hasRole(ADMIN_ROLE, msg.sender) && !hasRole(ICO_ROLE, msg.sender))
+        if (
+            !hasRole(ADMIN_ROLE, msg.sender) && !hasRole(ICO_ROLE, msg.sender)
+        ) {
             revert CallerIsNotAdminOrIco();
+        }
         if (tgeTimestampSet && block.timestamp > tgeTimestamp) {
             revert CannotAddAllocationAfterTge();
         }
@@ -555,9 +649,46 @@ contract MeliesTokenDistributor is AccessControl, ReentrancyGuard {
     }
 
     /**
-     * @dev Distributes unsold tokens to Community Fund (50%), Liquidity (25%), and AI Systems (25%)
-     * Unsold tokens = TOTAL_ICO_TOKENS (300M) - totalTokensSold (actual sales from ICO + off-chain)
-     * Can only be called once by ICO contract after TGE
+     * @notice Distributes unsold ICO tokens to ecosystem allocations after TGE
+     * @dev One-time distribution function that allocates unsold ICO tokens to support ecosystem growth.
+     * Calculates unsold amount as difference between planned ICO allocation (300M) and actual sales.
+     * Distribution follows predetermined percentages to balance community incentives and technical infrastructure.
+     *
+     * Distribution Allocation Breakdown:
+     * - Community Fund: 50% (airdrops, community rewards, marketing incentives)
+     * - Liquidity Pool: 25% (DEX liquidity provision, market making)
+     * - AI Systems: 25% (development, infrastructure, technical operations)
+     *
+     * Calculation Process:
+     * 1. Verify TGE has occurred and function hasn't been called before
+     * 2. Calculate unsold tokens: TOTAL_ICO_TOKENS (300M) - totalTokensSold
+     * 3. Split unsold amount according to predetermined percentages
+     * 4. Mint tokens directly to respective allocation contracts/addresses
+     * 5. Mark distribution as completed to prevent re-execution
+     *
+     * Requirements:
+     * - Only callable by addresses with ADMIN_ROLE (typically ICO contract)
+     * - TGE timestamp must be set and reached
+     * - Can only be executed once (unsoldTokensDistributed flag protection)
+     * - Must have accurately tracked totalTokensSold from ICO + off-chain sales
+     *
+     * Edge Cases:
+     * - If no tokens are unsold: function completes successfully with no distributions
+     * - If ICO was oversold: function reverts (shouldn't happen with proper caps)
+     *
+     * @custom:security-note One-time execution prevents manipulation of distribution amounts
+     * @custom:timing-critical Should be called promptly after TGE to enable ecosystem functions
+     *
+     * State Changes:
+     * - Sets unsoldTokensDistributed flag to true
+     * - Mints new tokens to ecosystem allocation addresses
+     * - Updates total supply of MEL tokens
+     *
+     * @custom:example
+     * ```solidity
+     * // Called by ICO contract after TGE
+     * distributor.distributeUnsoldTokens();
+     * ```
      */
     function distributeUnsoldTokens() external onlyRole(ADMIN_ROLE) {
         // Prevent multiple calls

@@ -130,11 +130,7 @@ contract MeliesICOTest is Test {
         vm.startPrank(admin);
         // Set up initial ETH price
         ethUsdPriceFeed.updateAnswer(int256(INITIAL_ETH_PRICE));
-        uniswapRouter.setExchangeRate(
-            address(0),
-            address(usdcToken),
-            INITIAL_ETH_PRICE
-        );
+        uniswapRouter.setExchangeRate(address(0), address(usdcToken), INITIAL_ETH_PRICE);
 
         // Set TGE timestamp (required for allocations)
         tokenDistributor.setTgeTimestamp(TGE_TIMESTAMP);
@@ -154,20 +150,11 @@ contract MeliesICOTest is Test {
         meliesToken.grantRole(meliesToken.MINTER_ROLE(), minter);
         meliesToken.grantRole(meliesToken.BURNER_ROLE(), burner);
         meliesToken.grantRole(meliesToken.MINTER_ROLE(), address(meliesICO));
-        meliesToken.grantRole(
-            meliesToken.MINTER_ROLE(),
-            address(tokenDistributor)
-        );
+        meliesToken.grantRole(meliesToken.MINTER_ROLE(), address(tokenDistributor));
 
         // Grant roles to TokenDistributor
-        tokenDistributor.grantRole(
-            tokenDistributor.ADMIN_ROLE(),
-            address(meliesICO)
-        );
-        tokenDistributor.grantRole(
-            tokenDistributor.ICO_ROLE(),
-            address(meliesICO)
-        );
+        tokenDistributor.grantRole(tokenDistributor.ADMIN_ROLE(), address(meliesICO));
+        tokenDistributor.grantRole(tokenDistributor.ICO_ROLE(), address(meliesICO));
 
         vm.stopPrank();
     }
@@ -341,16 +328,10 @@ contract MeliesICOTest is Test {
 
     function test_Deployment() public view {
         assertEq(address(meliesICO.meliesToken()), address(meliesToken));
-        assertEq(
-            address(meliesICO.tokenDistributor()),
-            address(tokenDistributor)
-        );
+        assertEq(address(meliesICO.tokenDistributor()), address(tokenDistributor));
         assertEq(address(meliesICO.usdcToken()), address(usdcToken));
         assertEq(address(meliesICO.uniswapRouter()), address(uniswapRouter));
-        assertEq(
-            address(meliesICO.ethUsdPriceFeed()),
-            address(ethUsdPriceFeed)
-        );
+        assertEq(address(meliesICO.ethUsdPriceFeed()), address(ethUsdPriceFeed));
     }
 
     function test_InitialRoles() public view {
@@ -481,18 +462,7 @@ contract MeliesICOTest is Test {
 
         vm.prank(admin);
         vm.expectRevert(IMeliesICO.InvalidTimeRange.selector);
-        meliesICO.addSaleRound(
-            startTime,
-            endTime,
-            0.1e6,
-            1_000_000e6,
-            100_000e6,
-            100e6,
-            10_000e6,
-            1,
-            6,
-            10
-        );
+        meliesICO.addSaleRound(startTime, endTime, 0.1e6, 1_000_000e6, 100_000e6, 100e6, 10_000e6, 1, 6, 10);
     }
 
     function test_AddSaleRoundInvalidTokenPrice() public {
@@ -621,18 +591,7 @@ contract MeliesICOTest is Test {
 
         vm.prank(user1);
         vm.expectRevert();
-        meliesICO.addSaleRound(
-            startTime,
-            endTime,
-            0.1e6,
-            1_000_000e6,
-            100_000e6,
-            100e6,
-            10_000e6,
-            1,
-            6,
-            10
-        );
+        meliesICO.addSaleRound(startTime, endTime, 0.1e6, 1_000_000e6, 100_000e6, 100e6, 10_000e6, 1, 6, 10);
     }
 
     function test_AddMultipleSaleRounds() public {
@@ -640,35 +599,13 @@ contract MeliesICOTest is Test {
         uint256 startTime1 = block.timestamp;
         uint256 endTime1 = startTime1 + 7 days;
         vm.prank(admin);
-        meliesICO.addSaleRound(
-            startTime1,
-            endTime1,
-            0.1e6,
-            1_000_000e6,
-            100_000e6,
-            100e6,
-            10_000e6,
-            1,
-            6,
-            10
-        );
+        meliesICO.addSaleRound(startTime1, endTime1, 0.1e6, 1_000_000e6, 100_000e6, 100e6, 10_000e6, 1, 6, 10);
 
         // Add second round
         uint256 startTime2 = endTime1;
         uint256 endTime2 = startTime2 + 7 days;
         vm.prank(admin);
-        meliesICO.addSaleRound(
-            startTime2,
-            endTime2,
-            0.2e6,
-            2_000_000e6,
-            200_000e6,
-            200e6,
-            20_000e6,
-            3,
-            8,
-            0
-        );
+        meliesICO.addSaleRound(startTime2, endTime2, 0.2e6, 2_000_000e6, 200_000e6, 200e6, 20_000e6, 3, 8, 0);
     }
 
     function test_AddSaleRoundWithZeroDuration() public {
@@ -677,18 +614,7 @@ contract MeliesICOTest is Test {
 
         vm.prank(admin);
         vm.expectRevert(IMeliesICO.InvalidTimeRange.selector);
-        meliesICO.addSaleRound(
-            startTime,
-            endTime,
-            0.1e6,
-            1_000_000e6,
-            100_000e6,
-            100e6,
-            10_000e6,
-            1,
-            6,
-            10
-        );
+        meliesICO.addSaleRound(startTime, endTime, 0.1e6, 1_000_000e6, 100_000e6, 100e6, 10_000e6, 1, 6, 10);
     }
 
     function test_AddSaleRoundWithOverlappingTimes() public {
@@ -696,18 +622,7 @@ contract MeliesICOTest is Test {
         uint256 endTime = startTime + 7 days;
 
         vm.startPrank(admin);
-        meliesICO.addSaleRound(
-            startTime,
-            endTime,
-            0.1e6,
-            1_000_000e6,
-            100_000e6,
-            100e6,
-            10_000e6,
-            1,
-            6,
-            10
-        );
+        meliesICO.addSaleRound(startTime, endTime, 0.1e6, 1_000_000e6, 100_000e6, 100e6, 10_000e6, 1, 6, 10);
 
         // Add overlapping round (should be allowed by contract)
         meliesICO.addSaleRound(
@@ -853,31 +768,9 @@ contract MeliesICOTest is Test {
         uint256 endTime2 = startTime2 + 7 days;
 
         vm.startPrank(admin);
-        meliesICO.addSaleRound(
-            startTime1,
-            endTime1,
-            0.1e6,
-            1_000_000e6,
-            100_000e6,
-            100e6,
-            10_000e6,
-            1,
-            6,
-            10
-        );
+        meliesICO.addSaleRound(startTime1, endTime1, 0.1e6, 1_000_000e6, 100_000e6, 100e6, 10_000e6, 1, 6, 10);
 
-        meliesICO.addSaleRound(
-            startTime2,
-            endTime2,
-            0.2e6,
-            2_000_000e6,
-            200_000e6,
-            200e6,
-            20_000e6,
-            2,
-            12,
-            20
-        );
+        meliesICO.addSaleRound(startTime2, endTime2, 0.2e6, 2_000_000e6, 200_000e6, 200e6, 20_000e6, 2, 12, 20);
         vm.stopPrank();
 
         // Add users to whitelist for both rounds
@@ -917,9 +810,7 @@ contract MeliesICOTest is Test {
         assertEq(allocation, 1000e6);
 
         // Check round total
-        (, , , , , , , uint256 totalUsdcRaised_, , , , ) = meliesICO.saleRounds(
-            0
-        );
+        (,,,,,,, uint256 totalUsdcRaised_,,,,) = meliesICO.saleRounds(0);
         assertEq(totalUsdcRaised_, 1000e6);
         assertEq(meliesICO.totalUsdcRaised(), 1000e6);
     }
@@ -1145,12 +1036,7 @@ contract MeliesICOTest is Test {
         vm.startPrank(user1);
         usdcToken.approve(address(meliesICO), 500e6); // Approve less than purchase amount
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IERC20Errors.ERC20InsufficientAllowance.selector,
-                address(meliesICO),
-                500e6,
-                1000e6
-            )
+            abi.encodeWithSelector(IERC20Errors.ERC20InsufficientAllowance.selector, address(meliesICO), 500e6, 1000e6)
         );
         meliesICO.buyWithUsdc(0, 1000e6);
         vm.stopPrank();
@@ -1163,12 +1049,7 @@ contract MeliesICOTest is Test {
         vm.startPrank(user1);
         // Don't approve any allowance
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IERC20Errors.ERC20InsufficientAllowance.selector,
-                address(meliesICO),
-                0,
-                1000e6
-            )
+            abi.encodeWithSelector(IERC20Errors.ERC20InsufficientAllowance.selector, address(meliesICO), 0, 1000e6)
         );
         meliesICO.buyWithUsdc(0, 1000e6);
         vm.stopPrank();
@@ -1530,7 +1411,7 @@ contract MeliesICOTest is Test {
         meliesICO.endIco();
 
         assertTrue(meliesICO.icoEnded());
-        (, , , , , , , , bool isFinish_, , , ) = meliesICO.saleRounds(0);
+        (,,,,,,,, bool isFinish_,,,) = meliesICO.saleRounds(0);
         assertTrue(isFinish_);
     }
 
@@ -1984,10 +1865,7 @@ contract MeliesICOTest is Test {
 
         vm.prank(admin);
         meliesICO.addFiatPurchase(user1, contribution2, 2);
-        assertEq(
-            meliesICO.getWalletContribution(user1, 2),
-            contribution1 + contribution2
-        );
+        assertEq(meliesICO.getWalletContribution(user1, 2), contribution1 + contribution2);
     }
 
     function test_WalletCannotExceedContributionLimit() public {

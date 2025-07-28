@@ -80,11 +80,7 @@ interface IMeliesTokenDistributor {
      * @param amount Amount of tokens claimed
      * @param allocationName Name of the allocation
      */
-    event TokensClaimed(
-        address indexed beneficiary,
-        uint256 amount,
-        string allocationName
-    );
+    event TokensClaimed(address indexed beneficiary, uint256 amount, string allocationName);
 
     /**
      * @dev Emitted when tokens are burned due to early claiming
@@ -93,12 +89,7 @@ interface IMeliesTokenDistributor {
      * @param allocationName Name of the allocation
      * @param haircutPercentage Percentage of tokens burned
      */
-    event TokensBurned(
-        address indexed beneficiary,
-        uint256 amount,
-        string allocationName,
-        uint256 haircutPercentage
-    );
+    event TokensBurned(address indexed beneficiary, uint256 amount, string allocationName, uint256 haircutPercentage);
 
     /**
      * @dev Emitted when unsold tokens are distributed
@@ -108,10 +99,7 @@ interface IMeliesTokenDistributor {
      * @param aiSystemsAmount Amount distributed to AI systems
      */
     event UnsoldTokensDistributed(
-        uint256 totalUnsoldTokens,
-        uint256 communityAmount,
-        uint256 liquidityAmount,
-        uint256 aiSystemsAmount
+        uint256 totalUnsoldTokens, uint256 communityAmount, uint256 liquidityAmount, uint256 aiSystemsAmount
     );
 
     /**
@@ -128,10 +116,7 @@ interface IMeliesTokenDistributor {
      * @param allocationName Name of the allocation
      */
     event TokenAllocationAmountModified(
-        address indexed beneficiary,
-        uint256 oldAmount,
-        uint256 newAmount,
-        string allocationName
+        address indexed beneficiary, uint256 oldAmount, uint256 newAmount, string allocationName
     );
 
     // ============ ERRORS ============
@@ -181,10 +166,7 @@ interface IMeliesTokenDistributor {
      *
      * Emits a {TokenAllocationAmountModified} event.
      */
-    function modifyTokenAllocationAmount(
-        uint256 allocationIndex,
-        uint256 newAmount
-    ) external;
+    function modifyTokenAllocationAmount(uint256 allocationIndex, uint256 newAmount) external;
 
     /**
      * @dev Calculates haircut percentage for early claiming based on allocation type
@@ -192,10 +174,10 @@ interface IMeliesTokenDistributor {
      * @param monthsPassed Number of months passed since TGE
      * @return haircutPercentage Percentage of tokens to burn (in basis points, 10000 = 100%)
      */
-    function calculateHaircutPercentage(
-        string memory allocationName,
-        uint256 monthsPassed
-    ) external pure returns (uint256);
+    function calculateHaircutPercentage(string memory allocationName, uint256 monthsPassed)
+        external
+        pure
+        returns (uint256);
 
     /**
      * @dev Claims vested tokens for a specific allocation (normal vesting schedule, no haircut)
@@ -208,10 +190,7 @@ interface IMeliesTokenDistributor {
      *
      * Emits a {TokensClaimed} event.
      */
-    function claimTokens(
-        uint256 allocationIndex,
-        bool isRoundAllocation
-    ) external;
+    function claimTokens(uint256 allocationIndex, bool isRoundAllocation) external;
 
     /**
      * @dev Claims all tokens (including unvested) with haircut penalty for early claiming
@@ -225,10 +204,7 @@ interface IMeliesTokenDistributor {
      *
      * Emits a {TokensClaimed} event and potentially a {TokensBurned} event.
      */
-    function claimAllTokensWithHaircut(
-        uint256 allocationIndex,
-        bool isRoundAllocation
-    ) external;
+    function claimAllTokensWithHaircut(uint256 allocationIndex, bool isRoundAllocation) external;
 
     /**
      * @dev Adds a new allocation (admin only) for off-chain deals
@@ -276,10 +252,7 @@ interface IMeliesTokenDistributor {
      * @param isRoundAllocation Whether this is a round allocation (true) or token allocation (false)
      * @return Amount of tokens that can be claimed
      */
-    function getClaimableAmount(
-        uint256 allocationIndex,
-        bool isRoundAllocation
-    ) external view returns (uint256);
+    function getClaimableAmount(uint256 allocationIndex, bool isRoundAllocation) external view returns (uint256);
 
     // ============ VIEW FUNCTIONS ============
 
@@ -288,18 +261,14 @@ interface IMeliesTokenDistributor {
      * @param beneficiary Address of the beneficiary
      * @return Array of allocation indices
      */
-    function getTokenAllocationsForBeneficiary(
-        address beneficiary
-    ) external view returns (uint256[] memory);
+    function getTokenAllocationsForBeneficiary(address beneficiary) external view returns (uint256[] memory);
 
     /**
      * @dev Gets all round allocations for a beneficiary
      * @param beneficiary Address of the beneficiary
      * @return Array of allocation indices
      */
-    function getRoundAllocationsForBeneficiary(
-        address beneficiary
-    ) external view returns (uint256[] memory);
+    function getRoundAllocationsForBeneficiary(address beneficiary) external view returns (uint256[] memory);
 
     /**
      * @dev Gets token allocation index for a specific beneficiary and allocation name
@@ -307,10 +276,10 @@ interface IMeliesTokenDistributor {
      * @param allocationName Name of the allocation
      * @return allocationIndex Index of the allocation (returns type(uint256).max if not found)
      */
-    function getTokenAllocationIndex(
-        address beneficiary,
-        string memory allocationName
-    ) external view returns (uint256);
+    function getTokenAllocationIndex(address beneficiary, string memory allocationName)
+        external
+        view
+        returns (uint256);
 
     /**
      * @dev Gets round allocation index for a specific beneficiary and allocation name
@@ -318,10 +287,10 @@ interface IMeliesTokenDistributor {
      * @param allocationName Name of the allocation
      * @return allocationIndex Index of the allocation (returns type(uint256).max if not found)
      */
-    function getRoundAllocationIndex(
-        address beneficiary,
-        string memory allocationName
-    ) external view returns (uint256);
+    function getRoundAllocationIndex(address beneficiary, string memory allocationName)
+        external
+        view
+        returns (uint256);
 
     /**
      * @dev Gets total number of token allocations
@@ -400,18 +369,14 @@ interface IMeliesTokenDistributor {
      * @param allocationIndex Index of the allocation
      * @return True if allocation can bypass TGE restrictions
      */
-    function hasTokenTgeBypass(
-        uint256 allocationIndex
-    ) external view returns (bool);
+    function hasTokenTgeBypass(uint256 allocationIndex) external view returns (bool);
 
     /**
      * @dev Checks if a round allocation has TGE bypass enabled
      * @param allocationIndex Index of the allocation
      * @return True if allocation can bypass TGE restrictions
      */
-    function hasRoundTgeBypass(
-        uint256 allocationIndex
-    ) external view returns (bool);
+    function hasRoundTgeBypass(uint256 allocationIndex) external view returns (bool);
 
     /**
      * @dev Gets detailed token allocation information
@@ -426,9 +391,7 @@ interface IMeliesTokenDistributor {
      * @return lastClaimTimestamp Last claim timestamp
      * @return bypassTgeRestriction Whether TGE restrictions are bypassed
      */
-    function getTokenAllocationDetails(
-        uint256 allocationIndex
-    )
+    function getTokenAllocationDetails(uint256 allocationIndex)
         external
         view
         returns (
@@ -456,9 +419,7 @@ interface IMeliesTokenDistributor {
      * @return lastClaimTimestamp Last claim timestamp
      * @return bypassTgeRestriction Whether TGE restrictions are bypassed
      */
-    function getRoundAllocationDetails(
-        uint256 allocationIndex
-    )
+    function getRoundAllocationDetails(uint256 allocationIndex)
         external
         view
         returns (
@@ -479,9 +440,10 @@ interface IMeliesTokenDistributor {
      * @return haircutPercentage Current haircut percentage (in basis points)
      * @return monthsPassed Months passed since TGE
      */
-    function getTokenHaircutInfo(
-        uint256 allocationIndex
-    ) external view returns (uint256 haircutPercentage, uint256 monthsPassed);
+    function getTokenHaircutInfo(uint256 allocationIndex)
+        external
+        view
+        returns (uint256 haircutPercentage, uint256 monthsPassed);
 
     /**
      * @dev Gets haircut information for a specific round allocation at current time
@@ -489,45 +451,38 @@ interface IMeliesTokenDistributor {
      * @return haircutPercentage Current haircut percentage (in basis points)
      * @return monthsPassed Months passed since TGE
      */
-    function getRoundHaircutInfo(
-        uint256 allocationIndex
-    ) external view returns (uint256 haircutPercentage, uint256 monthsPassed);
+    function getRoundHaircutInfo(uint256 allocationIndex)
+        external
+        view
+        returns (uint256 haircutPercentage, uint256 monthsPassed);
 
     /**
      * @dev Gets the actual start time for a token allocation (TGE + cliff duration)
      * @param allocationIndex Index of the allocation
      * @return actualStartTime The actual start time when vesting begins
      */
-    function getTokenActualStartTime(
-        uint256 allocationIndex
-    ) external view returns (uint256 actualStartTime);
+    function getTokenActualStartTime(uint256 allocationIndex) external view returns (uint256 actualStartTime);
 
     /**
      * @dev Gets the actual start time for a round allocation (TGE + cliff duration)
      * @param allocationIndex Index of the allocation
      * @return actualStartTime The actual start time when vesting begins
      */
-    function getRoundActualStartTime(
-        uint256 allocationIndex
-    ) external view returns (uint256 actualStartTime);
+    function getRoundActualStartTime(uint256 allocationIndex) external view returns (uint256 actualStartTime);
 
     /**
      * @dev Simulates normal token claim for token allocation (vested tokens only, no haircut)
      * @param allocationIndex Index of the allocation
      * @return claimableAmount Amount that can be claimed through normal vesting
      */
-    function simulateTokenClaim(
-        uint256 allocationIndex
-    ) external view returns (uint256 claimableAmount);
+    function simulateTokenClaim(uint256 allocationIndex) external view returns (uint256 claimableAmount);
 
     /**
      * @dev Simulates normal token claim for round allocation (vested tokens only, no haircut)
      * @param allocationIndex Index of the allocation
      * @return claimableAmount Amount that can be claimed through normal vesting
      */
-    function simulateRoundClaim(
-        uint256 allocationIndex
-    ) external view returns (uint256 claimableAmount);
+    function simulateRoundClaim(uint256 allocationIndex) external view returns (uint256 claimableAmount);
 
     /**
      * @dev Returns true if an account has a specific role
@@ -535,8 +490,5 @@ interface IMeliesTokenDistributor {
      * @param account The account to check
      * @return True if the account has the role
      */
-    function hasRole(
-        bytes32 role,
-        address account
-    ) external view returns (bool);
+    function hasRole(bytes32 role, address account) external view returns (bool);
 }

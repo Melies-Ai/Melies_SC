@@ -142,26 +142,65 @@ contract MeliesICO is IMeliesICO, ReentrancyGuard, AccessControl {
     }
 
     /**
-     * @dev Adds a new sale round to the ICO
-     * @param _startTime Start time of the round
-     * @param _endTime End time of the round
-     * @param _tokenPrice Token price in USDC (6 decimals)
-     * @param _maxCap Maximum USDC to be raised in this round (6 decimals)
-     * @param _softCap Minimum USDC to be raised for the round to be considered successful (6 decimals)
-     * @param _minPurchase Minimum purchase amount in USDC (6 decimals)
-     * @param _maxPurchase Maximum purchase amount in USDC (6 decimals)
-     * @param _cliffMonthDuration Cliff duration for token vesting (in months)
-     * @param _vestingMonthDuration Total vesting duration (in months)
-     * @param _tgeReleasePercentage TGE release percentage
+     * @notice Creates a new ICO sale round with specified parameters and vesting schedule
+     * @dev Adds a configured sale round to the ICO with comprehensive parameter validation.
+     * Each round operates independently with its own pricing, caps, limits, and vesting terms.
+     * Rounds are identified by sequential indices starting from 0.
+     *
+     * Round Configuration:
+     * - Timing: Start/end timestamps define the active purchase window
+     * - Pricing: Fixed token price in USDC (e.g., 0.10 USDC = 100000 with 6 decimals)
+     * - Caps: Hard cap (maximum raise) and soft cap (minimum for success)
+     * - Limits: Per-transaction purchase bounds and wallet contribution limits
+     * - Vesting: Cliff period, vesting duration, and TGE immediate release percentage
+     *
+     * Validation Rules:
+     * - Time: _startTime < _endTime (logical chronological order)
+     * - Price: _tokenPrice > 0 (must have positive value)
+     * - Caps: _softCap ≤ _maxCap and both > 0 (achievable targets)
+     * - Limits: _minPurchase ≤ _maxPurchase (valid range)
+     * - Vesting: _vestingMonthDuration ≥ 1 if not 0 (minimum 1 month if vesting)
+     * - Duration: _cliffMonthDuration + _vestingMonthDuration ≤ 48 (max 4 years total)
+     * - TGE: _tgeReleasePercentage ≤ 100 (cannot exceed 100% immediate release)
      *
      * Requirements:
-     * - Caller must have ADMIN_ROLE
-     * - Start time must be before end time
-     * - Token price must be greater than 0
-     * - Max cap and soft cap must be valid
-     * - Purchase limits must be valid
-     * - Vesting duration must be valid
-     * - TGE release percentage must not exceed 100%
+     * - Caller must have ADMIN_ROLE (only authorized administrators)
+     * - All parameter validation rules must pass
+     * - Can be called multiple times to create sequential rounds
+     *
+     * @param _startTime Unix timestamp when round becomes active for purchases
+     * @param _endTime Unix timestamp when round ends (exclusive)
+     * @param _tokenPrice Price per MEL token in USDC (6 decimals, e.g., 100000 = $0.10)
+     * @param _maxCap Maximum USDC to raise in this round (6 decimals, hard cap)
+     * @param _softCap Minimum USDC to raise for round success (6 decimals, enables claims)
+     * @param _minPurchase Minimum USDC purchase amount per transaction (6 decimals)
+     * @param _maxPurchase Maximum USDC purchase amount per transaction (6 decimals)
+     * @param _cliffMonthDuration Cliff period before vesting starts (in months, 0 = no cliff)
+     * @param _vestingMonthDuration Linear vesting duration after cliff (in months, 0 = no vesting)
+     * @param _tgeReleasePercentage Immediate release at TGE (0-100, e.g., 10 = 10%)
+     *
+     * @custom:security-note Comprehensive parameter validation prevents configuration errors
+     * @custom:precision-note All USDC amounts use 6 decimals, percentages are whole numbers
+     * @custom:gas-note Creates new storage slot in saleRounds array
+     *
+     * No events emitted (consider adding SaleRoundAdded event for better tracking).
+     *
+     * @custom:example
+     * ```solidity
+     * // Add seed round: $0.08/token, 30-day cliff, 12-month vest, 5% TGE
+     * ico.addSaleRound(
+     *     1640995200,  // Start: Jan 1, 2022
+     *     1643673600,  // End: Feb 1, 2022
+     *     80000,       // Price: $0.08 (80000 = 0.08 * 10^6)
+     *     5000000e6,   // Hard cap: $5M
+     *     1000000e6,   // Soft cap: $1M
+     *     1000e6,      // Min purchase: $1000
+     *     100000e6,    // Max purchase: $100k
+     *     1,           // Cliff: 1 month
+     *     12,          // Vesting: 12 months
+     *     5            // TGE: 5%
+     * );
+     * ```
      */
     function addSaleRound(
         uint256 _startTime,
@@ -177,14 +216,17 @@ contract MeliesICO is IMeliesICO, ReentrancyGuard, AccessControl {
     ) external onlyRole(ADMIN_ROLE) {
         if (_startTime >= _endTime) revert InvalidTimeRange();
         if (_tokenPrice == 0) revert InvalidTokenPrice();
-        if (_maxCap == 0 || _softCap == 0 || _softCap > _maxCap)
+        if (_maxCap == 0 || _softCap == 0 || _softCap > _maxCap) {
             revert InvalidCap();
+        }
         if (_minPurchase > _maxPurchase) revert InvalidPurchaseLimits();
-        if (_vestingMonthDuration != 0 && _vestingMonthDuration < 1)
+        if (_vestingMonthDuration != 0 && _vestingMonthDuration < 1) {
             revert InvalidVestingDuration();
+        }
         // Maximum duration is 48 months
-        if ((_cliffMonthDuration + _vestingMonthDuration) > 48)
+        if ((_cliffMonthDuration + _vestingMonthDuration) > 48) {
             revert InvalidCliffOrVestingDuration();
+        }
         if (_tgeReleasePercentage > 100) revert InvalidTgeReleasePercentage();
 
         saleRounds.push(
@@ -300,13 +342,46 @@ contract MeliesICO is IMeliesICO, ReentrancyGuard, AccessControl {
     }
 
     /**
-     * @dev Allows admins to end the ICO
+     * @notice Officially ends the ICO and determines refund eligibility for each round
+     * @dev Critical administrative function that finalizes all sale rounds and enables post-ICO operations.
+     * Evaluates each round against its soft cap to determine if refunds should be available.
+     * Once called, no further token purchases are possible and distribution can begin.
+     *
+     * End-of-ICO Process:
+     * 1. Mark ICO as permanently ended (irreversible operation)
+     * 2. Force-finish any incomplete rounds regardless of end time
+     * 3. Check each round's total USDC raised against its soft cap requirement
+     * 4. Enable refunds for rounds that failed to meet soft cap
+     * 5. Lock successful rounds for token distribution preparation
+     *
+     * Soft Cap Evaluation:
+     * - Rounds meeting soft cap: participants receive tokens via TokenDistributor
+     * - Rounds missing soft cap: participants become eligible for full USDC refunds
+     * - Mixed success enables selective refunds (successful rounds proceed normally)
+     *
+     * Post-ICO State Changes:
+     * - All purchase functions become permanently disabled
+     * - Token distribution preparation can begin for successful rounds
+     * - Refund functions become available for failed rounds
+     * - Unsold token calculation becomes finalized
      *
      * Requirements:
-     * - Caller must have ADMIN_ROLE
-     * - ICO must not already be ended
+     * - Only callable by addresses with ADMIN_ROLE
+     * - ICO must not already be ended (prevents double execution)
+     * - Can be called before natural round end times (emergency stop capability)
      *
-     * Emits an {IcoEnded} event.
+     * @custom:security-note This is an irreversible operation that finalizes the entire ICO
+     * @custom:emergency-use Can be used to stop ICO early if needed
+     *
+     * Emits:
+     * - {IcoEnded} event with final ICO statistics
+     * - {RefundsAvailableForRound} events for each failed round
+     *
+     * @custom:example
+     * ```solidity
+     * // End ICO after all rounds complete or in emergency
+     * icoContract.endIco();
+     * ```
      */
     function endIco() external onlyRole(ADMIN_ROLE) {
         if (icoEnded) revert IcoAlreadyEnded();
@@ -335,13 +410,47 @@ contract MeliesICO is IMeliesICO, ReentrancyGuard, AccessControl {
     }
 
     /**
-     * @dev Allows admins to withdraw raised USDC after ICO ends
+     * @notice Withdraws all USDC raised from successful ICO rounds for project funding
+     * @dev Administrative function to collect funds from successful rounds after ICO completion.
+     * Only withdraws USDC from rounds that met their soft cap requirements and are not subject to refunds.
+     * This represents the project's operational funding from successful token sales.
+     *
+     * Withdrawal Process:
+     * 1. Verify ICO has been officially ended
+     * 2. Calculate available USDC balance (should exclude refund-eligible amounts)
+     * 3. Transfer entire USDC balance to admin wallet
+     * 4. Emit withdrawal event for transparency
+     *
+     * Fund Sources:
+     * - USDC from successful sale rounds (those meeting soft cap)
+     * - USDC from completed off-chain sales recorded via addFiatPurchase()
+     * - Does not include USDC earmarked for refunds in failed rounds
+     *
+     * Timing Considerations:
+     * - Should be called after refund period to avoid complications
+     * - Best practice: allow sufficient time for all refund claims first
+     * - Can be called multiple times if needed (withdraws current balance)
      *
      * Requirements:
-     * - Caller must have ADMIN_ROLE
-     * - ICO must be ended
+     * - Only callable by addresses with ADMIN_ROLE
+     * - ICO must be officially ended (icoEnded == true)
+     * - Contract must have USDC balance available for withdrawal
      *
-     * Emits a {UsdcWithdrawn} event.
+     * @custom:security-note Admin-only function prevents unauthorized fund access
+     * @custom:transparency All withdrawals are logged via events for public audit
+     *
+     * State Changes:
+     * - Transfers USDC balance from contract to caller
+     * - Does not modify any internal accounting (preserves refund eligibility)
+     *
+     * Emits:
+     * - {UsdcWithdrawn} event with recipient address and withdrawal amount
+     *
+     * @custom:example
+     * ```solidity
+     * // After ICO ends and refund period
+     * icoContract.withdrawUsdc(); // Withdraws all available USDC
+     * ```
      */
     function withdrawUsdc() external onlyRole(ADMIN_ROLE) {
         if (!icoEnded) revert IcoNotEndedYet();
@@ -402,15 +511,47 @@ contract MeliesICO is IMeliesICO, ReentrancyGuard, AccessControl {
     // ============ USER FUNCTIONS ============
 
     /**
-     * @dev Allows users to buy tokens with ETH
-     * @param _roundId ID of the sale round
+     * @notice Purchases MEL tokens using ETH with automatic USDC conversion
+     * @dev Converts ETH to USDC via Uniswap V2 with slippage protection, then processes token purchase.
+     * Uses Chainlink ETH/USD price feed to calculate expected USDC amount and applies slippage tolerance.
+     *
+     * Process:
+     * 1. Validate ETH sent and round parameters
+     * 2. Get current ETH/USD price from Chainlink oracle
+     * 3. Calculate expected USDC amount from ETH value
+     * 4. Apply slippage tolerance to determine minimum USDC output
+     * 5. Swap ETH for USDC via Uniswap V2 router
+     * 6. Process token purchase with received USDC amount
+     * 7. Create vesting allocation for buyer
      *
      * Requirements:
-     * - User must send ETH with the transaction
-     * - Round ID must be valid
-     * - User must be whitelisted for the round
+     * - ETH amount must be greater than 0 (msg.value > 0)
+     * - Round ID must be valid and within bounds
+     * - User must be whitelisted for the specified round
+     * - Purchase amount must be within round's min/max limits
+     * - Purchase must not exceed wallet contribution limit ($50k)
+     * - Purchase must not exceed round's hard cap
+     * - ICO must not be ended
+     * - Chainlink price feed must return valid ETH/USD price
+     * - Uniswap swap must meet slippage requirements
      *
-     * Emits a {TokensPurchased} event.
+     * @param _roundId ID of the sale round (0-based index)
+     *
+     * @custom:security-note Protected against reentrancy and uses slippage protection
+     * @custom:oracle-note Depends on Chainlink ETH/USD price feed accuracy
+     * @custom:slippage-note Default 0.5% slippage tolerance, configurable by admin
+     * @custom:gas-note Higher gas cost due to Uniswap interaction and price feed calls
+     *
+     * Emits a {TokensPurchased} event with buyer address, USD amount, and token amount.
+     *
+     * @custom:example
+     * ```solidity
+     * // Purchase tokens in round 0 with 1 ETH
+     * ico.buyWithEth{value: 1 ether}(0);
+     *
+     * // Purchase with specific ETH amount
+     * ico.buyWithEth{value: 0.5 ether}(1);
+     * ```
      */
     function buyWithEth(uint8 _roundId) external payable nonReentrant {
         if (msg.value == 0) revert NoEthSent();
@@ -419,17 +560,49 @@ contract MeliesICO is IMeliesICO, ReentrancyGuard, AccessControl {
     }
 
     /**
-     * @dev Allows users to buy tokens with USDC
-     * @param _roundId ID of the sale round
-     * @param _amount Amount of USDC to spend on token purchase
+     * @notice Purchases MEL tokens directly using USDC stablecoin
+     * @dev Processes direct USDC token purchases without external swaps or price feed dependencies.
+     * More gas-efficient than ETH purchases as it skips Uniswap and Chainlink interactions.
+     *
+     * Process:
+     * 1. Validate round ID and USDC amount parameters
+     * 2. Transfer USDC from user to ICO contract using SafeERC20
+     * 3. Process purchase with exact USDC amount (no slippage)
+     * 4. Calculate token amount based on round's fixed token price
+     * 5. Create vesting allocation for buyer in token distributor
+     * 6. Update round totals and user contribution tracking
      *
      * Requirements:
-     * - Round ID must be valid
+     * - Round ID must be valid and within bounds
      * - USDC amount must be greater than 0
-     * - User must be whitelisted for the round
-     * - User must have approved sufficient USDC allowance
+     * - User must be whitelisted for the specified round
+     * - Purchase amount must be within round's min/max limits
+     * - Purchase must not exceed wallet contribution limit ($50k)
+     * - Purchase must not exceed round's hard cap
+     * - ICO must not be ended
+     * - User must have sufficient USDC balance
+     * - User must have approved sufficient USDC allowance to ICO contract
      *
-     * Emits a {TokensPurchased} event.
+     * @param _roundId ID of the sale round (0-based index)
+     * @param _amount Amount of USDC to spend on token purchase (6 decimals)
+     *
+     * @custom:security-note Protected against reentrancy and uses SafeERC20 for secure transfers
+     * @custom:precision-note USDC uses 6 decimals, MEL uses 8 decimals - conversion handled automatically
+     * @custom:gas-note Lower gas cost than ETH purchases (no external swaps or price feeds)
+     *
+     * Emits a {TokensPurchased} event with buyer address, USD amount, and token amount.
+     *
+     * @custom:example
+     * ```solidity
+     * // First approve USDC allowance
+     * usdc.approve(address(ico), 1000e6);
+     *
+     * // Purchase tokens with 1000 USDC in round 0
+     * ico.buyWithUsdc(0, 1000e6);
+     *
+     * // Purchase with different amount in round 1
+     * ico.buyWithUsdc(1, 5000e6);
+     * ```
      */
     function buyWithUsdc(
         uint8 _roundId,
@@ -444,14 +617,51 @@ contract MeliesICO is IMeliesICO, ReentrancyGuard, AccessControl {
     }
 
     /**
-     * @dev Allows users to request a refund if ICO ends without enabling claims
+     * @notice Claims full USDC refunds for failed ICO rounds that didn't meet soft cap requirements
+     * @dev Processes refunds across all failed rounds for the calling user in a single transaction.
+     * Only available when ICO has ended and token claims are disabled, indicating round failures.
+     * Refunds are only available for rounds that failed to meet their soft cap targets.
+     *
+     * Refund Eligibility Process:
+     * 1. ICO must be officially ended via endIco() call
+     * 2. Token claims must be disabled (indicates failed rounds exist)
+     * 3. User must have contributions in rounds that failed soft cap requirements
+     * 4. Each failed round's contributions are eligible for 100% USDC refund
+     *
+     * Refund Calculation:
+     * - Iterates through all sale rounds to find failed ones
+     * - Failed rounds: totalUsdcRaised < softCap
+     * - Sums user contributions from all failed rounds
+     * - Transfers total USDC amount back to user
+     * - Marks user allocations as refunded to prevent double claims
+     *
+     * Mixed Success Scenarios:
+     * - If some rounds succeeded and others failed: user gets refunds for failed rounds only
+     * - Successful round contributions remain locked for token distribution
+     * - Partial refunds are common in multi-round ICOs
      *
      * Requirements:
-     * - ICO must be ended
-     * - Claims must not be enabled
-     * - User must have allocations to refund
+     * - ICO must be ended (icoEnded == true)
+     * - Token claims must be disabled (claimEnabled == false)
+     * - User must have non-zero contributions in failed rounds
+     * - User must not have already claimed refunds for those rounds
      *
-     * Emits a {Refunded} event.
+     * @custom:security-note Uses nonReentrant modifier to prevent refund manipulation
+     * @custom:user-experience Single transaction refunds across all failed rounds for efficiency
+     *
+     * State Changes:
+     * - Marks user allocations as refunded in failed rounds
+     * - Transfers USDC from contract to user
+     * - Updates refund tracking to prevent double claims
+     *
+     * Emits:
+     * - {Refunded} event with total USDC amount and user address
+     *
+     * @custom:example
+     * ```solidity
+     * // After ICO ends with some failed rounds
+     * icoContract.refund(); // Claims refunds for all failed rounds
+     * ```
      */
     function refund() external nonReentrant {
         if (!icoEnded) revert IcoNotEndedYet();
@@ -492,8 +702,9 @@ contract MeliesICO is IMeliesICO, ReentrancyGuard, AccessControl {
     function refundForRound(uint256 _roundId) external nonReentrant {
         if (!icoEnded) revert IcoNotEndedYet();
         SaleRound storage round = saleRounds[_roundId];
-        if (!round.isFinish || round.totalUsdcRaised >= round.softCap)
+        if (!round.isFinish || round.totalUsdcRaised >= round.softCap) {
             revert RefundNotAvailable();
+        }
 
         uint256 refundUsdcAmount = userRoundContributions[msg.sender][_roundId];
         if (refundUsdcAmount == 0) revert NoAllocationToRefund();
@@ -561,8 +772,9 @@ contract MeliesICO is IMeliesICO, ReentrancyGuard, AccessControl {
             revert ExceedsWalletContributionLimit();
         }
 
-        if (round.totalUsdcRaised + _usdAmount > round.maxCap)
+        if (round.totalUsdcRaised + _usdAmount > round.maxCap) {
             revert RoundCapExceeded();
+        }
 
         // Track total raised in USDC
         round.totalUsdcRaised += _usdAmount;
@@ -643,8 +855,55 @@ contract MeliesICO is IMeliesICO, ReentrancyGuard, AccessControl {
     // ============ VIEW FUNCTIONS ============
 
     /**
-     * @dev Retrieves the current active sale round
-     * @return The current SaleRound struct
+     * @notice Retrieves the currently active ICO sale round with complete configuration details
+     * @dev Returns the full SaleRound struct for the round that is currently accepting purchases.
+     * Critical function for frontend interfaces, purchase validation, and real-time ICO monitoring.
+     * Automatically determines which round is active based on current timestamp and round status.
+     *
+     * SaleRound Struct Contents:
+     * - startTime: Unix timestamp when round becomes available for purchases
+     * - endTime: Unix timestamp when round automatically closes
+     * - tokenPrice: Price per MEL token in USDC (6 decimals)
+     * - maxCap: Maximum USDC that can be raised in this round
+     * - softCap: Minimum USDC required for round to be considered successful
+     * - minPurchase: Minimum USDC amount per individual purchase
+     * - maxPurchase: Maximum USDC amount per individual purchase
+     * - totalUsdcRaised: Current amount of USDC raised in this round
+     * - totalTokensSold: Current amount of MEL tokens sold in this round
+     * - isFinish: Whether round has been manually or automatically finished
+     * - Vesting parameters: cliffMonthDuration, vestingMonthDuration, tgeReleasePercentage
+     *
+     * Round Selection Logic:
+     * 1. Iterates through all configured sale rounds
+     * 2. Finds round where current time is between startTime and endTime
+     * 3. Ensures round is not manually finished (isFinish == false)
+     * 4. Returns first matching active round
+     *
+     * Use Cases:
+     * - Frontend display of current round information and progress
+     * - Purchase validation and price calculation
+     * - Investment opportunity assessment for users
+     * - Real-time ICO analytics and monitoring dashboards
+     * - Integration with automated purchase systems
+     *
+     * @return SaleRound struct containing all configuration and status data for active round
+     *
+     * @custom:view-function Pure read operation with no state changes or gas cost
+     * @custom:frontend-critical Essential for user interfaces and purchase flows
+     * @custom:real-time Reflects live round status and progress immediately
+     *
+     * Reverts:
+     * - If no round is currently active (all rounds finished or none started)
+     * - If ICO has been ended via endIco() function
+     *
+     * @custom:example
+     * ```solidity
+     * SaleRound memory activeRound = icoContract.getCurrentRound();
+     *
+     * uint256 progress = (activeRound.totalUsdcRaised * 100) / activeRound.maxCap;
+     * uint256 timeRemaining = activeRound.endTime - block.timestamp;
+     * bool softCapReached = activeRound.totalUsdcRaised >= activeRound.softCap;
+     * ```
      */
     function getCurrentRound() public view returns (SaleRound memory) {
         uint256 roundId = getCurrentRoundId();
@@ -652,11 +911,56 @@ contract MeliesICO is IMeliesICO, ReentrancyGuard, AccessControl {
     }
 
     /**
-     * @dev Retrieves the ID of the current active sale round
-     * @return The ID of the current round
+     * @notice Returns the array index of the currently active ICO sale round
+     * @dev Determines which sale round is currently accepting purchases based on timing and status.
+     * Essential utility function for round-specific operations, purchase routing, and frontend integration.
+     * Used internally by getCurrentRound() and externally for round-specific function calls.
+     *
+     * Round Detection Algorithm:
+     * 1. Iterates through saleRounds array sequentially (index 0 to length-1)
+     * 2. For each round, checks three conditions:
+     *    - Current timestamp >= round startTime (round has started)
+     *    - Current timestamp < round endTime (round hasn't naturally expired)
+     *    - isFinish == false (round hasn't been manually ended)
+     * 3. Returns index of first round meeting all conditions
+     * 4. Reverts if no active round is found
+     *
+     * Round Priority System:
+     * - Earlier rounds in array take precedence over later ones
+     * - If multiple rounds could theoretically be active, first one wins
+     * - Round scheduling should avoid overlaps for predictable behavior
+     *
+     * Common Integration Patterns:
+     * - Use with other functions requiring roundId parameter
+     * - Frontend round selection and navigation
+     * - Automated purchase systems for current round targeting
+     * - Analytics systems tracking round progression
+     * - Admin tools for round management and monitoring
+     *
+     * Error Conditions:
+     * - No rounds configured: reverts with array bounds error
+     * - All rounds finished: reverts with NoActiveRound error
+     * - Current time before first round: reverts with NoActiveRound error
+     * - ICO ended: should revert from calling functions
+     *
+     * @return uint256 The zero-based array index of the currently active sale round
+     *
+     * @custom:view-function Pure read operation with no state changes
+     * @custom:utility-function Often used in combination with other round-specific functions
+     * @custom:frontend-integration Essential for round-aware user interfaces
+     *
+     * @custom:example
+     * ```solidity
+     * uint256 currentRoundId = icoContract.getCurrentRoundId();
+     *
+     * // Use the ID for round-specific operations
+     * bool isWhitelisted = icoContract.isWhitelisted(currentRoundId, userAddress);
+     * uint256 userContribution = icoContract.getUserRoundContribution(userAddress, currentRoundId);
+     * icoContract.buyWithUsdc(currentRoundId, purchaseAmount);
+     * ```
      */
     function getCurrentRoundId() public view returns (uint256) {
-        for (uint i = 0; i < saleRounds.length; i++) {
+        for (uint256 i = 0; i < saleRounds.length; i++) {
             if (
                 block.timestamp >= saleRounds[i].startTime &&
                 block.timestamp < saleRounds[i].endTime &&

@@ -19,13 +19,5 @@ contract MockMeliesICO is MeliesICO {
         address _usdcToken,
         address _uniswapRouter,
         address _ethUsdPriceFeed
-    )
-        MeliesICO(
-            _meliesToken,
-            _tokenDistributor,
-            _usdcToken,
-            _uniswapRouter,
-            _ethUsdPriceFeed
-        )
-    {}
+    ) MeliesICO(_meliesToken, _tokenDistributor, _usdcToken, _uniswapRouter, _ethUsdPriceFeed) {}
 }

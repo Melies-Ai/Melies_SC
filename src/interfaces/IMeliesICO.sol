@@ -41,11 +41,7 @@ interface IMeliesICO {
 
     // Events
     event SlippageToleranceUpdated(uint256 newSlippageTolerance);
-    event TokensPurchased(
-        address indexed buyer,
-        uint256 usdAmount,
-        uint256 tokenAmount
-    );
+    event TokensPurchased(address indexed buyer, uint256 usdAmount, uint256 tokenAmount);
     event AllocationAdded(
         address indexed beneficiary,
         uint256 tokenAmount,
@@ -59,11 +55,7 @@ interface IMeliesICO {
     event Refunded(address indexed user, uint256 usdcAmount);
     event UsdcWithdrawn(address indexed recipient, uint256 amount);
     event EthWithdrawn(address indexed recipient, uint256 amount);
-    event TokensRecovered(
-        address indexed token,
-        address indexed recipient,
-        uint256 amount
-    );
+    event TokensRecovered(address indexed token, address indexed recipient, uint256 amount);
     event AddedToWhitelist(uint256 indexed roundId, address[] addresses);
     event RemovedFromWhitelist(uint256 indexed roundId, address[] addresses);
     event FutureRoundUpdated(uint256 indexed roundId);
@@ -144,20 +136,14 @@ interface IMeliesICO {
      * @param _roundId ID of the sale round
      * @param _addresses Addresses to be added to the whitelist
      */
-    function addToWhitelist(
-        uint256 _roundId,
-        address[] calldata _addresses
-    ) external;
+    function addToWhitelist(uint256 _roundId, address[] calldata _addresses) external;
 
     /**
      * @dev Removes addresses from the whitelist for a specific round
      * @param _roundId ID of the sale round
      * @param _addresses Addresses to be removed from the whitelist
      */
-    function removeFromWhitelist(
-        uint256 _roundId,
-        address[] calldata _addresses
-    ) external;
+    function removeFromWhitelist(uint256 _roundId, address[] calldata _addresses) external;
 
     /**
      * @dev Allows users to buy tokens with ETH
@@ -178,11 +164,7 @@ interface IMeliesICO {
      * @param _usdAmount Amount of USD equivalent purchased
      * @param _roundId ID of the sale round
      */
-    function addFiatPurchase(
-        address _buyer,
-        uint256 _usdAmount,
-        uint8 _roundId
-    ) external;
+    function addFiatPurchase(address _buyer, uint256 _usdAmount, uint8 _roundId) external;
 
     /**
      * @dev Allows admins to withdraw funds raised in a specific round
@@ -241,10 +223,7 @@ interface IMeliesICO {
      * @param _roundId ID of the sale round
      * @return The total USDC amount contributed by the user in the specified round
      */
-    function getUserRoundContribution(
-        address _beneficiary,
-        uint256 _roundId
-    ) external view returns (uint256);
+    function getUserRoundContribution(address _beneficiary, uint256 _roundId) external view returns (uint256);
 
     /**
      * @dev Gets the total contribution amount for a specific wallet in a specific round
@@ -252,10 +231,7 @@ interface IMeliesICO {
      * @param _roundId ID of the round to check
      * @return Total USD amount contributed by the wallet in the round
      */
-    function getWalletContribution(
-        address _wallet,
-        uint256 _roundId
-    ) external view returns (uint256);
+    function getWalletContribution(address _wallet, uint256 _roundId) external view returns (uint256);
 
     /**
      * @dev Gets the total tokens sold across all ICO rounds

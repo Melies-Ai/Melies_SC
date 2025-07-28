@@ -118,11 +118,12 @@ contract MeliesStakingTest is Test {
         vm.stopPrank();
     }
 
-    function setupRewards(uint _days) public {
+    function setupRewards(uint256 _days) public {
         uint256 startTime = 1;
         for (uint256 i = 0; i < _days; i++) {
             startTime = startTime + 1 days;
             vm.warp(startTime);
+            // Using admin for convenience, but any address could call this function
             vm.prank(admin);
             stakingContract.updateAccumulatedRewards();
         }
@@ -933,7 +934,7 @@ contract MeliesStakingTest is Test {
             gasAfter = gasleft();
             gasUsed = gasBefore - gasAfter;
             // Assert that gas usage is within an acceptable range even with a large number of stakers
-            // In Base chain, block gas limit is still growing. For now, it's 156M
+            // In Base chain, block gas limit is still growing. For now, it's 156M.
             assert(gasUsed < 156_000_000);
             vm.resetGasMetering();
         } while (newStaking.isRewardUpdating());
@@ -1086,8 +1087,8 @@ contract MeliesStakingTest is Test {
         string memory str,
         string memory delim
     ) internal pure returns (string[] memory) {
-        uint count = 1;
-        for (uint i = 0; i < bytes(str).length; i++) {
+        uint256 count = 1;
+        for (uint256 i = 0; i < bytes(str).length; i++) {
             if (
                 keccak256(abi.encodePacked(bytes1(bytes(str)[i]))) ==
                 keccak256(abi.encodePacked(bytes(delim)))
@@ -1098,8 +1099,8 @@ contract MeliesStakingTest is Test {
 
         string[] memory parts = new string[](count);
         count = 0;
-        uint lastIndex = 0;
-        for (uint i = 0; i < bytes(str).length; i++) {
+        uint256 lastIndex = 0;
+        for (uint256 i = 0; i < bytes(str).length; i++) {
             if (
                 keccak256(abi.encodePacked(bytes1(bytes(str)[i]))) ==
                 keccak256(abi.encodePacked(bytes(delim)))
@@ -1115,12 +1116,12 @@ contract MeliesStakingTest is Test {
 
     function substring(
         string memory str,
-        uint startIndex,
-        uint endIndex
+        uint256 startIndex,
+        uint256 endIndex
     ) internal pure returns (string memory) {
         bytes memory strBytes = bytes(str);
         bytes memory result = new bytes(endIndex - startIndex);
-        for (uint i = startIndex; i < endIndex; i++) {
+        for (uint256 i = startIndex; i < endIndex; i++) {
             result[i - startIndex] = strBytes[i];
         }
         return string(result);
@@ -1129,7 +1130,7 @@ contract MeliesStakingTest is Test {
     function parseUint(string memory str) internal pure returns (uint256) {
         bytes memory b = bytes(str);
         uint256 result = 0;
-        for (uint i = 0; i < b.length; i++) {
+        for (uint256 i = 0; i < b.length; i++) {
             uint8 c = uint8(b[i]);
             if (c >= 48 && c <= 57) {
                 result = result * 10 + (c - 48);
@@ -1469,13 +1470,6 @@ contract MeliesStakingTest is Test {
         vm.stopPrank();
     }
 
-    function test_EarlyUnstakeWithIndex0WorksNormally() public {
-        // Test that early unstaking a no-lock stake works normally
-        // Note: This test is skipped due to reentrancy issue in contract design
-        // where earlyUnstake calls unstake internally, both with nonReentrant modifier
-        assertTrue(true); // Placeholder - this would need contract redesign
-    }
-
     function test_EmergencyWithdrawNonStakingToken() public {
         // Deploy a mock ERC20
         MockERC20 mockToken = new MockERC20("MOCK", "MOCK");
@@ -1709,6 +1703,68 @@ contract MeliesStakingTest is Test {
         );
         assertTrue(stakingContract.hasRole(ADMIN_ROLE, admin));
         assertFalse(stakingContract.hasRole(ADMIN_ROLE, user1));
+    }
+
+    // ============================================================================
+    // UPDATE ACCUMULATED REWARDS ROLE TESTS
+    // ============================================================================
+
+    /// @notice Test that updateAccumulatedRewards can be called by non-admin users
+    function test_UpdateAccumulatedRewardsCallableByNonAdmin() public {
+        setupStakingWithoutCompound();
+        vm.warp(block.timestamp + 1 days);
+
+        // Non-admin user should be able to call updateAccumulatedRewards
+        vm.prank(user1);
+        stakingContract.updateAccumulatedRewards();
+
+        // Verify rewards were updated
+        MeliesStaking.StakingInfo[] memory userStakes = stakingContract
+            .getUserStakes(user1);
+        assertGt(userStakes[0].accumulatedRewardsWithPrecision, 0);
+    }
+
+    /// @notice Test that updateAccumulatedRewards can be called by any user address
+    function test_UpdateAccumulatedRewardsCallableByAnyUser() public {
+        setupStakingWithoutCompound();
+        vm.warp(block.timestamp + 1 days);
+
+        // User2 (who has no stakes) should be able to call updateAccumulatedRewards
+        vm.prank(user2);
+        stakingContract.updateAccumulatedRewards();
+
+        // Verify rewards were updated for user1
+        MeliesStaking.StakingInfo[] memory userStakes = stakingContract
+            .getUserStakes(user1);
+        assertGt(userStakes[0].accumulatedRewardsWithPrecision, 0);
+    }
+
+    /// @notice Test that updateAccumulatedRewards cooldown works
+    function test_UpdateAccumulatedRewardsCooldownWorks() public {
+        setupStakingWithoutCompound();
+        uint32 lastUpdateTime = uint32(block.timestamp) + 1 days;
+        vm.warp(lastUpdateTime);
+
+        // First call should work
+        stakingContract.updateAccumulatedRewards();
+
+        // Second call immediately after should fail due to cooldown
+        vm.expectRevert(MeliesStaking.CanOnlyUpdateOncePerDay.selector);
+        stakingContract.updateAccumulatedRewards();
+
+        // Third call after 23 hours 59 minutes shouldn't work
+        vm.warp(lastUpdateTime + 1 days - 1);
+        vm.expectRevert(MeliesStaking.CanOnlyUpdateOncePerDay.selector);
+        stakingContract.updateAccumulatedRewards();
+
+        // Fourth call after 1 day should work
+        vm.warp(lastUpdateTime + 1 days);
+        stakingContract.updateAccumulatedRewards();
+
+        // Fifth call after 1 day 1 second shouldn't work again
+        vm.warp(lastUpdateTime + 1 days + 1);
+        vm.expectRevert(MeliesStaking.CanOnlyUpdateOncePerDay.selector);
+        stakingContract.updateAccumulatedRewards();
     }
 
     // ============================================================================

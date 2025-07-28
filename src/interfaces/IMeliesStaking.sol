@@ -132,11 +132,7 @@ interface IMeliesStaking {
      *
      * Emits a {Staked} event.
      */
-    function stake(
-        uint256 _amount,
-        uint8 _durationIndex,
-        bool _compoundRewards
-    ) external;
+    function stake(uint256 _amount, uint8 _durationIndex, bool _compoundRewards) external;
 
     /**
      * @dev Allows users to unstake their tokens and claim rewards
@@ -150,10 +146,7 @@ interface IMeliesStaking {
      *
      * Emits an {Unstaked} event.
      */
-    function unstake(
-        uint256 _stakeIndex,
-        uint256 _ponderatedAmountWithPrecision
-    ) external;
+    function unstake(uint256 _stakeIndex, uint256 _ponderatedAmountWithPrecision) external;
 
     /**
      * @dev Allows users to unstake their tokens early with burn penalty
@@ -167,10 +160,7 @@ interface IMeliesStaking {
      *
      * Emits an {EarlyUnstaked} event.
      */
-    function earlyUnstake(
-        uint256 _stakeIndex,
-        uint256 _ponderatedAmountWithPrecision
-    ) external;
+    function earlyUnstake(uint256 _stakeIndex, uint256 _ponderatedAmountWithPrecision) external;
 
     /**
      * @dev Allows users to claim their accumulated rewards
@@ -279,18 +269,14 @@ interface IMeliesStaking {
      * @param user Address of the user
      * @return Array of StakingInfo structs
      */
-    function getUserStakes(
-        address user
-    ) external view returns (StakingInfo[] memory);
+    function getUserStakes(address user) external view returns (StakingInfo[] memory);
 
     /**
      * @dev Returns the total amount of stakes for a specific user
      * @param user Address of the user
      * @return totalStakes Total amount of stakes for the user
      */
-    function getTotalUserStakes(
-        address user
-    ) external view returns (uint256 totalStakes);
+    function getTotalUserStakes(address user) external view returns (uint256 totalStakes);
 
     /**
      * @dev Checks if TGE timestamp has been set
@@ -304,10 +290,10 @@ interface IMeliesStaking {
      * @param monthsElapsed Number of full months elapsed since staking
      * @return burnPercentage Percentage to burn (0-9000 representing 0-90%)
      */
-    function getEarlyUnstakingBurnPercentage(
-        uint8 durationIndex,
-        uint256 monthsElapsed
-    ) external pure returns (uint256 burnPercentage);
+    function getEarlyUnstakingBurnPercentage(uint8 durationIndex, uint256 monthsElapsed)
+        external
+        pure
+        returns (uint256 burnPercentage);
 
     /**
      * @dev Previews the early unstaking result for a user's stake
@@ -319,19 +305,10 @@ interface IMeliesStaking {
      * @return burnPercentage Burn percentage applied (0-9000)
      * @return monthsElapsed Number of months elapsed since staking
      */
-    function previewEarlyUnstaking(
-        address user,
-        uint256 stakeIndex,
-        uint256 ponderatedAmountWithPrecision
-    )
+    function previewEarlyUnstaking(address user, uint256 stakeIndex, uint256 ponderatedAmountWithPrecision)
         external
         view
-        returns (
-            uint256 netAmount,
-            uint256 burnAmount,
-            uint256 burnPercentage,
-            uint256 monthsElapsed
-        );
+        returns (uint256 netAmount, uint256 burnAmount, uint256 burnPercentage, uint256 monthsElapsed);
 
     /**
      * @dev Calculates the rewards for a specific stake
@@ -340,11 +317,10 @@ interface IMeliesStaking {
      * @param dailyBudget Daily budget for rewards
      * @return Rewards and ponderated rewards with precision
      */
-    function calculateRewards(
-        address user,
-        uint256 stakeIndex,
-        uint256 dailyBudget
-    ) external view returns (uint256, uint256);
+    function calculateRewards(address user, uint256 stakeIndex, uint256 dailyBudget)
+        external
+        view
+        returns (uint256, uint256);
 
     /**
      * @dev Returns true if the contract is paused, false otherwise
@@ -358,8 +334,5 @@ interface IMeliesStaking {
      * @param account The account to check
      * @return True if the account has the role
      */
-    function hasRole(
-        bytes32 role,
-        address account
-    ) external view returns (bool);
+    function hasRole(bytes32 role, address account) external view returns (bool);
 }

@@ -103,10 +103,7 @@ contract MeliesTokenDistributorTest is Test {
         assertEq(tgeReleasePercentage, 208); // 2.08%
         assertEq(lastClaimTimestamp, 0);
         assertEq(bypassTgeRestriction, false);
-        assertEq(
-            keccak256(bytes(allocationName)),
-            keccak256(bytes("Community"))
-        );
+        assertEq(keccak256(bytes(allocationName)), keccak256(bytes("Community")));
 
         // Test Treasury allocation (5.00% TGE)
         (
@@ -129,10 +126,7 @@ contract MeliesTokenDistributorTest is Test {
         assertEq(tgeReleasePercentage, 500); // 5.00%
         assertEq(lastClaimTimestamp, 0);
         assertEq(bypassTgeRestriction, false);
-        assertEq(
-            keccak256(bytes(allocationName)),
-            keccak256(bytes("Treasury"))
-        );
+        assertEq(keccak256(bytes(allocationName)), keccak256(bytes("Treasury")));
 
         // Test Team allocation (0% TGE, 12 months cliff)
         (
@@ -178,10 +172,7 @@ contract MeliesTokenDistributorTest is Test {
         assertEq(tgeReleasePercentage, 10000); // 100.00%
         assertEq(lastClaimTimestamp, 0);
         assertEq(bypassTgeRestriction, false);
-        assertEq(
-            keccak256(bytes(allocationName)),
-            keccak256(bytes("Liquidity"))
-        );
+        assertEq(keccak256(bytes(allocationName)), keccak256(bytes("Liquidity")));
 
         // Verify total allocations count
         assertEq(distributor.getTokenAllocationsCount(), 6);
@@ -283,52 +274,22 @@ contract MeliesTokenDistributorTest is Test {
 
     function test_HaircutCalculationPrivateSale() public {
         // Test Private Sale round haircut calculation
-        assertEq(
-            distributor.calculateHaircutPercentage("Private Sale", 0),
-            9000
-        ); // 90% at TGE
-        assertEq(
-            distributor.calculateHaircutPercentage("Private Sale", 1),
-            9000
-        ); // Month 1: 90% - 1000 * (1-1) = 90%
-        assertEq(
-            distributor.calculateHaircutPercentage("Private Sale", 2),
-            8000
-        ); // Month 2: 90% - 1000 * (2-1) = 8000
-        assertEq(
-            distributor.calculateHaircutPercentage("Private Sale", 5),
-            5000
-        ); // Month 5: 90% - 1000 * (5-1) = 5000
-        assertEq(
-            distributor.calculateHaircutPercentage("Private Sale", 9),
-            1000
-        ); // Near end
+        assertEq(distributor.calculateHaircutPercentage("Private Sale", 0), 9000); // 90% at TGE
+        assertEq(distributor.calculateHaircutPercentage("Private Sale", 1), 9000); // Month 1: 90% - 1000 * (1-1) = 90%
+        assertEq(distributor.calculateHaircutPercentage("Private Sale", 2), 8000); // Month 2: 90% - 1000 * (2-1) = 8000
+        assertEq(distributor.calculateHaircutPercentage("Private Sale", 5), 5000); // Month 5: 90% - 1000 * (5-1) = 5000
+        assertEq(distributor.calculateHaircutPercentage("Private Sale", 9), 1000); // Near end
         assertEq(distributor.calculateHaircutPercentage("Private Sale", 10), 0); // No haircut after 10 months
         assertEq(distributor.calculateHaircutPercentage("Private Sale", 15), 0); // No haircut after 10 months
     }
 
     function test_HaircutCalculationPublicSale() public {
         // Test Public Sale round haircut calculation
-        assertEq(
-            distributor.calculateHaircutPercentage("Public Sale", 0),
-            9000
-        ); // 90% at TGE
-        assertEq(
-            distributor.calculateHaircutPercentage("Public Sale", 1),
-            9000
-        ); // Month 1: 90% - 900 * (1-1) = 90%
-        assertEq(
-            distributor.calculateHaircutPercentage("Public Sale", 2),
-            8100
-        ); // Month 2: 90% - 900 * (2-1) = 8100
-        assertEq(
-            distributor.calculateHaircutPercentage("Public Sale", 6),
-            4500
-        ); // Month 6: 90% - 900 * (6-1) = 4500
-        assertEq(
-            distributor.calculateHaircutPercentage("Public Sale", 10),
-            900
-        ); // Near end
+        assertEq(distributor.calculateHaircutPercentage("Public Sale", 0), 9000); // 90% at TGE
+        assertEq(distributor.calculateHaircutPercentage("Public Sale", 1), 9000); // Month 1: 90% - 900 * (1-1) = 90%
+        assertEq(distributor.calculateHaircutPercentage("Public Sale", 2), 8100); // Month 2: 90% - 900 * (2-1) = 8100
+        assertEq(distributor.calculateHaircutPercentage("Public Sale", 6), 4500); // Month 6: 90% - 900 * (6-1) = 4500
+        assertEq(distributor.calculateHaircutPercentage("Public Sale", 10), 900); // Near end
         assertEq(distributor.calculateHaircutPercentage("Public Sale", 11), 0); // No haircut after 11 months
         assertEq(distributor.calculateHaircutPercentage("Public Sale", 20), 0); // No haircut after 11 months
     }
@@ -357,10 +318,7 @@ contract MeliesTokenDistributorTest is Test {
 
         // Calculate expected values
         uint256 remainingTokens = 10_000e8; // No previous claims
-        uint256 haircutPercentage = distributor.calculateHaircutPercentage(
-            "Seed",
-            2
-        );
+        uint256 haircutPercentage = distributor.calculateHaircutPercentage("Seed", 2);
         uint256 burnAmount = (remainingTokens * haircutPercentage) / 10000;
         uint256 expectedMintAmount = remainingTokens - burnAmount;
 
@@ -371,8 +329,7 @@ contract MeliesTokenDistributorTest is Test {
         assertEq(distributor.getTotalTokensBurned(), burnAmount);
 
         // Verify allocation is fully claimed
-        (, uint256 claimedAmount, , , , , , , ) = distributor
-            .getRoundAllocationDetails(0);
+        (, uint256 claimedAmount,,,,,,,) = distributor.getRoundAllocationDetails(0);
         assertEq(claimedAmount, 10_000e8);
     }
 
@@ -391,15 +348,7 @@ contract MeliesTokenDistributorTest is Test {
     function test_ClaimAllTokensWithNoHaircut() public {
         // Add a community-type allocation (no haircut)
         vm.prank(admin);
-        distributor.addAllocation(
-            user2,
-            10_000e8,
-            0,
-            12,
-            "Community Test",
-            1000,
-            false
-        );
+        distributor.addAllocation(user2, 10_000e8, 0, 12, "Community Test", 1000, false);
 
         // Fast forward to 2 months after TGE
         vm.warp(tgeTimestamp + 2 * 30 days);
@@ -434,13 +383,9 @@ contract MeliesTokenDistributorTest is Test {
 
         // Calculate expected values
         uint256 remainingTokens = 10_000e8 - firstClaimAmount;
-        uint256 haircutPercentage = distributor.calculateHaircutPercentage(
-            "Seed",
-            3
-        );
+        uint256 haircutPercentage = distributor.calculateHaircutPercentage("Seed", 3);
         uint256 burnAmount = (remainingTokens * haircutPercentage) / 10000;
-        uint256 expectedFinalAmount = firstClaimAmount +
-            (remainingTokens - burnAmount);
+        uint256 expectedFinalAmount = firstClaimAmount + (remainingTokens - burnAmount);
 
         assertEq(meliesToken.balanceOf(user1), expectedFinalAmount);
         assertEq(distributor.getTotalTokensBurned(), burnAmount);
@@ -514,9 +459,7 @@ contract MeliesTokenDistributorTest is Test {
     function test_AddAllocationAfterTGE() public {
         vm.warp(tgeTimestamp + 1);
         vm.prank(admin);
-        vm.expectRevert(
-            MeliesTokenDistributor.CannotAddAllocationAfterTge.selector
-        );
+        vm.expectRevert(MeliesTokenDistributor.CannotAddAllocationAfterTge.selector);
         distributor.addAllocation(user1, 50_000e8, 3, 12, "IDO", 500, true);
     }
 
@@ -524,15 +467,7 @@ contract MeliesTokenDistributorTest is Test {
         // Invalid beneficiary
         vm.prank(admin);
         vm.expectRevert(MeliesTokenDistributor.InvalidBeneficiary.selector);
-        distributor.addAllocation(
-            address(0),
-            50_000e8,
-            3,
-            12,
-            "IDO",
-            500,
-            true
-        );
+        distributor.addAllocation(address(0), 50_000e8, 3, 12, "IDO", 500, true);
 
         // Invalid amount
         vm.prank(admin);
@@ -546,9 +481,7 @@ contract MeliesTokenDistributorTest is Test {
 
         // Invalid TGE percentage
         vm.prank(admin);
-        vm.expectRevert(
-            MeliesTokenDistributor.InvalidTgeReleasePercentage.selector
-        );
+        vm.expectRevert(MeliesTokenDistributor.InvalidTgeReleasePercentage.selector);
         distributor.addAllocation(user1, 50_000e8, 3, 12, "IDO", 10001, true);
     }
 
@@ -565,10 +498,7 @@ contract MeliesTokenDistributorTest is Test {
         // Should be able to claim TGE tokens before TGE
         vm.warp(tgeTimestamp - 1000);
 
-        uint256 claimableAmount = distributor.getClaimableAmount(
-            allocationIndex,
-            true
-        );
+        uint256 claimableAmount = distributor.getClaimableAmount(allocationIndex, true);
         assertEq(claimableAmount, 1000e8); // 10% TGE
 
         vm.prank(user1);
@@ -592,8 +522,7 @@ contract MeliesTokenDistributorTest is Test {
         assertEq(distributor.getRoundAllocationsCount(), initialCount);
 
         // Verify total amount is updated
-        (uint256 totalAmount, , , , , , , , ) = distributor
-            .getRoundAllocationDetails(initialCount - 1);
+        (uint256 totalAmount,,,,,,,,) = distributor.getRoundAllocationDetails(initialCount - 1);
         assertEq(totalAmount, 15_000e8);
 
         // Verify total tokens sold is updated
@@ -607,36 +536,17 @@ contract MeliesTokenDistributorTest is Test {
     function test_DistributeUnsoldTokens() public {
         // Add some sales first
         vm.prank(admin);
-        distributor.addAllocation(
-            user1,
-            50_000_000e8,
-            0,
-            12,
-            "Seed",
-            1000,
-            false
-        );
+        distributor.addAllocation(user1, 50_000_000e8, 0, 12, "Seed", 1000, false);
         vm.prank(admin);
-        distributor.addAllocation(
-            user2,
-            100_000_000e8,
-            0,
-            12,
-            "Private Sale",
-            1000,
-            false
-        );
+        distributor.addAllocation(user2, 100_000_000e8, 0, 12, "Private Sale", 1000, false);
 
         // Move to after TGE
         vm.warp(tgeTimestamp + 1);
 
         // Get initial allocation amounts
-        (uint256 initialCommunityAmount, , , , , , , , ) = distributor
-            .getTokenAllocationDetails(0);
-        (uint256 initialLiquidityAmount, , , , , , , , ) = distributor
-            .getTokenAllocationDetails(4);
-        (uint256 initialAiSystemsAmount, , , , , , , , ) = distributor
-            .getTokenAllocationDetails(5);
+        (uint256 initialCommunityAmount,,,,,,,,) = distributor.getTokenAllocationDetails(0);
+        (uint256 initialLiquidityAmount,,,,,,,,) = distributor.getTokenAllocationDetails(4);
+        (uint256 initialAiSystemsAmount,,,,,,,,) = distributor.getTokenAllocationDetails(5);
 
         // Distribute unsold tokens
         vm.prank(admin);
@@ -652,56 +562,32 @@ contract MeliesTokenDistributorTest is Test {
         uint256 expectedAiSystemsAdd = (unsoldTokens * 25) / 100; // 25%
 
         // Verify allocations are updated
-        (uint256 newCommunityAmount, , , , , , , , ) = distributor
-            .getTokenAllocationDetails(0);
-        (uint256 newLiquidityAmount, , , , , , , , ) = distributor
-            .getTokenAllocationDetails(4);
-        (uint256 newAiSystemsAmount, , , , , , , , ) = distributor
-            .getTokenAllocationDetails(5);
+        (uint256 newCommunityAmount,,,,,,,,) = distributor.getTokenAllocationDetails(0);
+        (uint256 newLiquidityAmount,,,,,,,,) = distributor.getTokenAllocationDetails(4);
+        (uint256 newAiSystemsAmount,,,,,,,,) = distributor.getTokenAllocationDetails(5);
 
-        assertEq(
-            newCommunityAmount,
-            initialCommunityAmount + expectedCommunityAdd
-        );
-        assertEq(
-            newLiquidityAmount,
-            initialLiquidityAmount + expectedLiquidityAdd
-        );
-        assertEq(
-            newAiSystemsAmount,
-            initialAiSystemsAmount + expectedAiSystemsAdd
-        );
+        assertEq(newCommunityAmount, initialCommunityAmount + expectedCommunityAdd);
+        assertEq(newLiquidityAmount, initialLiquidityAmount + expectedLiquidityAdd);
+        assertEq(newAiSystemsAmount, initialAiSystemsAmount + expectedAiSystemsAdd);
     }
 
     function test_DistributeUnsoldTokensUpdateVestingPeriods() public {
         // Add sales for different performance levels
         vm.prank(admin);
-        distributor.addAllocation(
-            user1,
-            75_000_000e8,
-            0,
-            12,
-            "Seed",
-            1000,
-            false
-        ); // 25% sales performance
+        distributor.addAllocation(user1, 75_000_000e8, 0, 12, "Seed", 1000, false); // 25% sales performance
 
         vm.warp(tgeTimestamp + 1);
 
         // Get initial durations
-        (, , , uint256 initialCommunityDuration, , , , , ) = distributor
-            .getTokenAllocationDetails(0);
-        (, , , uint256 initialAiSystemsDuration, , , , , ) = distributor
-            .getTokenAllocationDetails(5);
+        (,,, uint256 initialCommunityDuration,,,,,) = distributor.getTokenAllocationDetails(0);
+        (,,, uint256 initialAiSystemsDuration,,,,,) = distributor.getTokenAllocationDetails(5);
 
         vm.prank(admin);
         distributor.distributeUnsoldTokens();
 
         // Verify vesting periods are updated based on sales performance
-        (, , , uint256 newCommunityDuration, , , , , ) = distributor
-            .getTokenAllocationDetails(0);
-        (, , , uint256 newAiSystemsDuration, , , , , ) = distributor
-            .getTokenAllocationDetails(5);
+        (,,, uint256 newCommunityDuration,,,,,) = distributor.getTokenAllocationDetails(0);
+        (,,, uint256 newAiSystemsDuration,,,,,) = distributor.getTokenAllocationDetails(5);
 
         // For 25% sales performance, should be 75 months for Community and 28 months for AI Systems
         assertEq(newCommunityDuration, 75);
@@ -711,25 +597,15 @@ contract MeliesTokenDistributorTest is Test {
     function test_DistributeUnsoldTokensMultiplePerformanceLevels() public {
         // Test 100% sales performance
         vm.prank(admin);
-        distributor.addAllocation(
-            user1,
-            300_000_000e8,
-            0,
-            12,
-            "Seed",
-            1000,
-            false
-        );
+        distributor.addAllocation(user1, 300_000_000e8, 0, 12, "Seed", 1000, false);
 
         vm.warp(tgeTimestamp + 1);
         vm.prank(admin);
         distributor.distributeUnsoldTokens();
 
         // Should maintain original vesting periods
-        (, , , uint256 communityDuration, , , , , ) = distributor
-            .getTokenAllocationDetails(0);
-        (, , , uint256 aiSystemsDuration, , , , , ) = distributor
-            .getTokenAllocationDetails(5);
+        (,,, uint256 communityDuration,,,,,) = distributor.getTokenAllocationDetails(0);
+        (,,, uint256 aiSystemsDuration,,,,,) = distributor.getTokenAllocationDetails(5);
 
         assertEq(communityDuration, 48);
         assertEq(aiSystemsDuration, 18);
@@ -749,9 +625,7 @@ contract MeliesTokenDistributorTest is Test {
 
         // Second call should fail
         vm.prank(admin);
-        vm.expectRevert(
-            MeliesTokenDistributor.UnsoldTokensAlreadyDistributed.selector
-        );
+        vm.expectRevert(MeliesTokenDistributor.UnsoldTokensAlreadyDistributed.selector);
         distributor.distributeUnsoldTokens();
     }
 
@@ -765,15 +639,7 @@ contract MeliesTokenDistributorTest is Test {
     function test_DistributeUnsoldTokensNoUnsoldTokens() public {
         // Sell all tokens
         vm.prank(admin);
-        distributor.addAllocation(
-            user1,
-            300_000_000e8,
-            0,
-            12,
-            "Seed",
-            1000,
-            false
-        );
+        distributor.addAllocation(user1, 300_000_000e8, 0, 12, "Seed", 1000, false);
 
         vm.warp(tgeTimestamp + 1);
         vm.prank(admin);
@@ -806,19 +672,13 @@ contract MeliesTokenDistributorTest is Test {
         vm.warp(tgeTimestamp + 3 * 30 days);
 
         // Since simulateClaimWithHaircut doesn't exist, we'll test the haircut calculation directly
-        uint256 haircutPercentage = distributor.calculateHaircutPercentage(
-            "Seed",
-            3
-        );
+        uint256 haircutPercentage = distributor.calculateHaircutPercentage("Seed", 3);
         uint256 remainingTokens = 10_000e8;
         uint256 burnAmount = (remainingTokens * haircutPercentage) / 10000;
         uint256 mintAmount = remainingTokens - burnAmount;
 
         assertEq(remainingTokens, 10_000e8);
-        assertEq(
-            haircutPercentage,
-            distributor.calculateHaircutPercentage("Seed", 3)
-        );
+        assertEq(haircutPercentage, distributor.calculateHaircutPercentage("Seed", 3));
         assertEq(burnAmount, (remainingTokens * haircutPercentage) / 10000);
         assertEq(mintAmount, remainingTokens - burnAmount);
     }
@@ -832,57 +692,31 @@ contract MeliesTokenDistributorTest is Test {
 
         vm.warp(tgeTimestamp + 5 * 30 days);
 
-        (uint256 haircutPercentage, uint256 monthsPassed) = distributor
-            .getRoundHaircutInfo(allocationIndex);
+        (uint256 haircutPercentage, uint256 monthsPassed) = distributor.getRoundHaircutInfo(allocationIndex);
 
         assertEq(monthsPassed, 5);
-        assertEq(
-            haircutPercentage,
-            distributor.calculateHaircutPercentage("Seed", 5)
-        );
+        assertEq(haircutPercentage, distributor.calculateHaircutPercentage("Seed", 5));
     }
 
     function test_GetSalesPerformance() public {
         assertEq(distributor.getSalesPerformance(), 0);
 
         vm.prank(admin);
-        distributor.addAllocation(
-            user1,
-            150_000_000e8,
-            0,
-            12,
-            "Seed",
-            1000,
-            false
-        );
+        distributor.addAllocation(user1, 150_000_000e8, 0, 12, "Seed", 1000, false);
 
         assertEq(distributor.getSalesPerformance(), 50); // 50%
 
         vm.prank(admin);
-        distributor.addAllocation(
-            user2,
-            150_000_000e8,
-            0,
-            12,
-            "Private Sale",
-            1000,
-            false
-        );
+        distributor.addAllocation(user2, 150_000_000e8, 0, 12, "Private Sale", 1000, false);
 
         assertEq(distributor.getSalesPerformance(), 100); // 100%
     }
 
     function test_GetAllocationIndex() public {
-        uint256 index = distributor.getTokenAllocationIndex(
-            communityAddress,
-            "Community"
-        );
+        uint256 index = distributor.getTokenAllocationIndex(communityAddress, "Community");
         assertEq(index, 0);
 
-        index = distributor.getTokenAllocationIndex(
-            communityAddress,
-            "NonExistent"
-        );
+        index = distributor.getTokenAllocationIndex(communityAddress, "NonExistent");
         assertEq(index, type(uint256).max);
     }
 
@@ -891,18 +725,9 @@ contract MeliesTokenDistributorTest is Test {
         vm.prank(admin);
         distributor.addAllocation(user1, 10_000e8, 0, 12, "Seed", 1000, false);
         vm.prank(admin);
-        distributor.addAllocation(
-            user1,
-            20_000e8,
-            0,
-            12,
-            "Private Sale",
-            1000,
-            false
-        );
+        distributor.addAllocation(user1, 20_000e8, 0, 12, "Private Sale", 1000, false);
 
-        uint256[] memory indices = distributor
-            .getRoundAllocationsForBeneficiary(user1);
+        uint256[] memory indices = distributor.getRoundAllocationsForBeneficiary(user1);
         assertEq(indices.length, 2);
     }
 
@@ -914,14 +739,10 @@ contract MeliesTokenDistributorTest is Test {
         assertEq(distributor.hasTokenTgeBypass(invalidIndex), false);
 
         // Since simulateClaimWithHaircut doesn't exist, we'll test with invalid index
-        uint256 haircutPercentage = distributor.calculateHaircutPercentage(
-            "Invalid",
-            0
-        );
+        uint256 haircutPercentage = distributor.calculateHaircutPercentage("Invalid", 0);
         assertEq(haircutPercentage, 0);
 
-        (uint256 haircutPerc, uint256 monthsPassed) = distributor
-            .getTokenHaircutInfo(invalidIndex);
+        (uint256 haircutPerc, uint256 monthsPassed) = distributor.getTokenHaircutInfo(invalidIndex);
         assertEq(haircutPerc, 0);
         assertEq(monthsPassed, 0);
     }
@@ -977,26 +798,12 @@ contract MeliesTokenDistributorTest is Test {
         );
 
         // Grant necessary roles
-        meliesToken.grantRole(
-            meliesToken.MINTER_ROLE(),
-            address(newDistributor)
-        );
-        meliesToken.grantRole(
-            meliesToken.BURNER_ROLE(),
-            address(newDistributor)
-        );
+        meliesToken.grantRole(meliesToken.MINTER_ROLE(), address(newDistributor));
+        meliesToken.grantRole(meliesToken.BURNER_ROLE(), address(newDistributor));
         newDistributor.grantRole(newDistributor.ICO_ROLE(), admin);
 
         // Test adding allocation without TGE timestamp set
-        newDistributor.addAllocation(
-            user1,
-            10_000e8,
-            0,
-            12,
-            "Seed",
-            1000,
-            false
-        );
+        newDistributor.addAllocation(user1, 10_000e8, 0, 12, "Seed", 1000, false);
 
         // Test distributing unsold tokens without TGE timestamp set
         vm.expectRevert(MeliesTokenDistributor.TgeTimestampNotSet.selector);
@@ -1016,8 +823,7 @@ contract MeliesTokenDistributorTest is Test {
         vm.prank(admin);
         distributor.modifyTokenAllocationAmount(0, newAmount); // Community allocation
 
-        (uint256 totalAmount, , , , , , , , ) = distributor
-            .getTokenAllocationDetails(0);
+        (uint256 totalAmount,,,,,,,,) = distributor.getTokenAllocationDetails(0);
         assertEq(totalAmount, newAmount);
     }
 
@@ -1107,25 +913,9 @@ contract MeliesTokenDistributorTest is Test {
         vm.prank(admin);
         distributor.addAllocation(user1, 10_000e8, 0, 12, "Seed", 1000, false);
         vm.prank(admin);
-        distributor.addAllocation(
-            user2,
-            20_000e8,
-            0,
-            12,
-            "Private Sale",
-            1000,
-            false
-        );
+        distributor.addAllocation(user2, 20_000e8, 0, 12, "Private Sale", 1000, false);
         vm.prank(admin);
-        distributor.addAllocation(
-            user3,
-            30_000e8,
-            0,
-            12,
-            "Public Sale",
-            1000,
-            false
-        );
+        distributor.addAllocation(user3, 30_000e8, 0, 12, "Public Sale", 1000, false);
 
         vm.warp(tgeTimestamp + 6 * 30 days);
 
@@ -1154,15 +944,7 @@ contract MeliesTokenDistributorTest is Test {
         vm.prank(admin);
         distributor.addAllocation(user1, 10_000e8, 0, 12, "Seed", 1000, false);
         vm.prank(admin);
-        distributor.addAllocation(
-            user2,
-            20_000e8,
-            0,
-            12,
-            "Private Sale",
-            1000,
-            false
-        );
+        distributor.addAllocation(user2, 20_000e8, 0, 12, "Private Sale", 1000, false);
 
         vm.warp(tgeTimestamp + 2 * 30 days);
 
@@ -1170,20 +952,14 @@ contract MeliesTokenDistributorTest is Test {
         vm.prank(user1);
         distributor.claimAllTokensWithHaircut(0, true);
 
-        uint256 user1Haircut = distributor.calculateHaircutPercentage(
-            "Seed",
-            2
-        );
+        uint256 user1Haircut = distributor.calculateHaircutPercentage("Seed", 2);
         totalExpectedBurns += (10_000e8 * user1Haircut) / 10000;
 
         // User2 claims with haircut
         vm.prank(user2);
         distributor.claimAllTokensWithHaircut(1, true);
 
-        uint256 user2Haircut = distributor.calculateHaircutPercentage(
-            "Private Sale",
-            2
-        );
+        uint256 user2Haircut = distributor.calculateHaircutPercentage("Private Sale", 2);
         totalExpectedBurns += (20_000e8 * user2Haircut) / 10000;
 
         assertEq(distributor.getTotalTokensBurned(), totalExpectedBurns);
@@ -1195,35 +971,11 @@ contract MeliesTokenDistributorTest is Test {
 
         // Add allocations with different schedules
         vm.prank(admin);
-        distributor.addAllocation(
-            user1,
-            50_000e8,
-            0,
-            6,
-            "Short Vesting",
-            2000,
-            false
-        );
+        distributor.addAllocation(user1, 50_000e8, 0, 6, "Short Vesting", 2000, false);
         vm.prank(admin);
-        distributor.addAllocation(
-            user2,
-            100_000e8,
-            3,
-            12,
-            "Medium Vesting",
-            1000,
-            false
-        );
+        distributor.addAllocation(user2, 100_000e8, 3, 12, "Medium Vesting", 1000, false);
         vm.prank(admin);
-        distributor.addAllocation(
-            user3,
-            200_000e8,
-            6,
-            24,
-            "Long Vesting",
-            500,
-            false
-        );
+        distributor.addAllocation(user3, 200_000e8, 6, 24, "Long Vesting", 500, false);
 
         uint256 user1Index = distributor.getRoundAllocationsCount() - 3;
         uint256 user2Index = distributor.getRoundAllocationsCount() - 2;
@@ -1232,18 +984,9 @@ contract MeliesTokenDistributorTest is Test {
         // Test at TGE
         vm.warp(tgeTimestamp);
 
-        uint256 user1Claimable = distributor.getClaimableAmount(
-            user1Index,
-            true
-        );
-        uint256 user2Claimable = distributor.getClaimableAmount(
-            user2Index,
-            true
-        );
-        uint256 user3Claimable = distributor.getClaimableAmount(
-            user3Index,
-            true
-        );
+        uint256 user1Claimable = distributor.getClaimableAmount(user1Index, true);
+        uint256 user2Claimable = distributor.getClaimableAmount(user2Index, true);
+        uint256 user3Claimable = distributor.getClaimableAmount(user3Index, true);
 
         assertEq(user1Claimable, 10_000e8); // TGE 20% (50_000e8 * 2000 / 10000) = 10_000e8
         assertEq(user2Claimable, 10_000e8); // TGE 10% (100_000e8 * 1000 / 10000) = 10_000e8
@@ -1280,25 +1023,9 @@ contract MeliesTokenDistributorTest is Test {
         vm.prank(admin);
         distributor.addAllocation(user1, 50_000e8, 0, 12, "Seed", 1000, false);
         vm.prank(admin);
-        distributor.addAllocation(
-            user2,
-            75_000e8,
-            0,
-            12,
-            "Private Sale",
-            1000,
-            false
-        );
+        distributor.addAllocation(user2, 75_000e8, 0, 12, "Private Sale", 1000, false);
         vm.prank(admin);
-        distributor.addAllocation(
-            user3,
-            100_000e8,
-            0,
-            12,
-            "Public Sale",
-            1000,
-            false
-        );
+        distributor.addAllocation(user3, 100_000e8, 0, 12, "Public Sale", 1000, false);
 
         uint256 user1Index = distributor.getRoundAllocationsCount() - 3;
         uint256 user2Index = distributor.getRoundAllocationsCount() - 2;
@@ -1315,18 +1042,9 @@ contract MeliesTokenDistributorTest is Test {
             vm.warp(tgeTimestamp + timePeriods[i] * 30 days);
 
             // Calculate expected haircuts
-            uint256 seedHaircut = distributor.calculateHaircutPercentage(
-                "Seed",
-                timePeriods[i]
-            );
-            uint256 privateHaircut = distributor.calculateHaircutPercentage(
-                "Private Sale",
-                timePeriods[i]
-            );
-            uint256 publicHaircut = distributor.calculateHaircutPercentage(
-                "Public Sale",
-                timePeriods[i]
-            );
+            uint256 seedHaircut = distributor.calculateHaircutPercentage("Seed", timePeriods[i]);
+            uint256 privateHaircut = distributor.calculateHaircutPercentage("Private Sale", timePeriods[i]);
+            uint256 publicHaircut = distributor.calculateHaircutPercentage("Public Sale", timePeriods[i]);
 
             // Verify haircut calculations are correct
             if (timePeriods[i] < 8) {
@@ -1354,25 +1072,9 @@ contract MeliesTokenDistributorTest is Test {
 
         // Phase 1: ICO sales
         vm.prank(icoContract);
-        distributor.addAllocation(
-            user1,
-            100_000_000e8,
-            0,
-            12,
-            "Seed",
-            1000,
-            false
-        );
+        distributor.addAllocation(user1, 100_000_000e8, 0, 12, "Seed", 1000, false);
         vm.prank(icoContract);
-        distributor.addAllocation(
-            user2,
-            150_000_000e8,
-            0,
-            12,
-            "Private Sale",
-            1000,
-            false
-        );
+        distributor.addAllocation(user2, 150_000_000e8, 0, 12, "Private Sale", 1000, false);
 
         // Phase 2: TGE
         vm.warp(tgeTimestamp);
@@ -1421,14 +1123,8 @@ contract MeliesTokenDistributorTest is Test {
         );
 
         // Grant necessary roles
-        meliesToken.grantRole(
-            meliesToken.MINTER_ROLE(),
-            address(newDistributor)
-        );
-        meliesToken.grantRole(
-            meliesToken.BURNER_ROLE(),
-            address(newDistributor)
-        );
+        meliesToken.grantRole(meliesToken.MINTER_ROLE(), address(newDistributor));
+        meliesToken.grantRole(meliesToken.BURNER_ROLE(), address(newDistributor));
         newDistributor.grantRole(newDistributor.ICO_ROLE(), admin);
 
         // Test TGE timestamp event
@@ -1441,36 +1137,17 @@ contract MeliesTokenDistributorTest is Test {
 
     function test_EventEmissionAllocationAdded() public {
         vm.expectEmit(true, false, false, true);
-        emit MeliesTokenDistributor.AllocationAdded(
-            user1,
-            10_000e8,
-            0,
-            12,
-            "Test Allocation",
-            false
-        );
+        emit MeliesTokenDistributor.AllocationAdded(user1, 10_000e8, 0, 12, "Test Allocation", false);
 
         vm.prank(admin);
-        distributor.addAllocation(
-            user1,
-            10_000e8,
-            0,
-            12,
-            "Test Allocation",
-            1000,
-            false
-        );
+        distributor.addAllocation(user1, 10_000e8, 0, 12, "Test Allocation", 1000, false);
     }
 
     function test_EventEmissionTokensClaimed() public {
         vm.warp(tgeTimestamp);
 
         vm.expectEmit(true, false, false, true);
-        emit MeliesTokenDistributor.TokensClaimed(
-            liquidityAddress,
-            100_000_000e8,
-            "Liquidity"
-        );
+        emit MeliesTokenDistributor.TokensClaimed(liquidityAddress, 100_000_000e8, "Liquidity");
 
         vm.prank(liquidityAddress);
         distributor.claimTokens(4, false);
@@ -1485,19 +1162,11 @@ contract MeliesTokenDistributorTest is Test {
 
         vm.warp(tgeTimestamp + 2 * 30 days);
 
-        uint256 haircutPercentage = distributor.calculateHaircutPercentage(
-            "Seed",
-            2
-        );
+        uint256 haircutPercentage = distributor.calculateHaircutPercentage("Seed", 2);
         uint256 burnAmount = (10_000e8 * haircutPercentage) / 10000;
 
         vm.expectEmit(true, false, false, true);
-        emit MeliesTokenDistributor.TokensBurned(
-            user1,
-            burnAmount,
-            "Seed",
-            haircutPercentage
-        );
+        emit MeliesTokenDistributor.TokensBurned(user1, burnAmount, "Seed", haircutPercentage);
 
         vm.prank(user1);
         distributor.claimAllTokensWithHaircut(allocationIndex, true);
@@ -1513,10 +1182,7 @@ contract MeliesTokenDistributorTest is Test {
 
         vm.expectEmit(true, false, false, true);
         emit MeliesTokenDistributor.UnsoldTokensDistributed(
-            unsoldTokens,
-            communityAmount,
-            liquidityAmount,
-            aiSystemsAmount
+            unsoldTokens, communityAmount, liquidityAmount, aiSystemsAmount
         );
 
         vm.prank(admin);
@@ -1528,12 +1194,7 @@ contract MeliesTokenDistributorTest is Test {
         uint256 newAmount = 250_000_000e8;
 
         vm.expectEmit(true, false, false, true);
-        emit MeliesTokenDistributor.TokenAllocationAmountModified(
-            communityAddress,
-            oldAmount,
-            newAmount,
-            "Community"
-        );
+        emit MeliesTokenDistributor.TokenAllocationAmountModified(communityAddress, oldAmount, newAmount, "Community");
 
         vm.prank(admin);
         distributor.modifyTokenAllocationAmount(0, newAmount);
